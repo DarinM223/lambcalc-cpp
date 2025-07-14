@@ -5,7 +5,8 @@
             "includePath": [
                 "${workspaceFolder}/**",
                 "/usr/include/llvm-19",
-                "/usr/include/llvm-c-19"
+                "/usr/include/llvm-c-19",
+                "${workspaceFolder}/googletest-prefix/src/googletest/googletest/include"
             ],
             "defines": [],
             "compilerPath": "/usr/bin/clang-19",
