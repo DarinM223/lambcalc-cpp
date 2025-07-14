@@ -1,5 +1,6 @@
 #include "anf.h"
 #include <exception>
+#include <sstream>
 
 namespace lambcalc {
 namespace anf {
@@ -104,6 +105,12 @@ struct AnfConvertVisitor {
 std::unique_ptr<Exp> convert(ast::Exp &exp) {
   return exp.convert(
       [](Value value) { return std::make_unique<Exp>(HaltExp{value}); });
+}
+
+std::string Exp::dump() {
+  std::ostringstream out;
+  out << *this;
+  return out.str();
 }
 
 } // namespace anf

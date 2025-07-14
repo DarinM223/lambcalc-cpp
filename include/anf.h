@@ -31,6 +31,7 @@ struct GlobValue {
 
 struct Value : public std::variant<IntValue, VarValue, GlobValue> {
   using variant::variant;
+  friend std::ostream &operator<<(std::ostream &os, const Value &value);
 };
 
 struct HaltExp {
@@ -93,6 +94,8 @@ struct ProjExp {
 struct Exp : public std::variant<HaltExp, FunExp, JoinExp, JumpExp, AppExp,
                                  BopExp, IfExp, TupleExp, ProjExp> {
   using variant::variant;
+  friend std::ostream &operator<<(std::ostream &os, const Exp &exp);
+  std::string dump();
 };
 
 std::unique_ptr<Exp> convert(ast::Exp &exp);

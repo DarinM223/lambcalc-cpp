@@ -14,7 +14,8 @@ TEST(Hello, Hello) {
 
   auto anf = anf::convert(*expr);
 
-  EXPECT_EQ(anf, nullptr);
+  EXPECT_EQ(anf->dump(), "BopExp { tmp0, 2, 2, 3, BopExp { tmp1, 0, tmp0, 4, "
+                         "HaltExp { tmp1 } } }");
 }
 
 } // namespace lambcalc
