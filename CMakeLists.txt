@@ -54,7 +54,7 @@ set(CMAKE_CXX_STANDARD 20)
 
 include_directories(include/)
 
-file(GLOB_RECURSE SOURCES src/main.cpp src/anf.cpp src/visitor.cpp)
+file(GLOB_RECURSE SOURCES src/main.cpp src/anf.cpp src/visitor.cpp src/convert.cpp)
 file(GLOB_RECURSE TEST_SOURCES test/main.cpp test/anf.cpp)
 
 add_executable(lambcalc ${SOURCES})

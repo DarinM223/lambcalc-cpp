@@ -15,26 +15,72 @@ concept Task = requires(T task, std::unique_ptr<Exp> *parentLink, Exp &exp) {
   { T(parentLink, exp) } -> std::same_as<T>;
 };
 
+struct DefaultExpVisitor {
+  void operator()(auto &) {}
+};
+
 template <typename Visitor, Task T, Worklist<T> W>
 class WorklistVisitor : public Visitor {
   W worklist;
 
 public:
   template <class... Args> WorklistVisitor(Args... args) : Visitor(args...) {}
-  virtual void addWorklist(std::unique_ptr<Exp> *parentLink, Exp &exp);
+  W &getWorklist() { return worklist; }
+  virtual void addWorklist(std::unique_ptr<Exp> *parentLink, Exp &exp) {
+    worklist.push(T(parentLink, exp));
+  }
   virtual void addWorklist(const Var &name, std::unique_ptr<Exp> *parentLink,
-                           Exp &exp);
+                           Exp &exp) {
+    addWorklist(parentLink, exp);
+  }
   virtual void addWorklist(const std::vector<Var> &name,
-                           std::unique_ptr<Exp> *parentLink, Exp &exp);
-  decltype(auto) operator()(HaltExp &exp);
-  decltype(auto) operator()(FunExp &exp);
-  decltype(auto) operator()(JoinExp &exp);
-  decltype(auto) operator()(JumpExp &exp);
-  decltype(auto) operator()(AppExp &exp);
-  decltype(auto) operator()(BopExp &exp);
-  decltype(auto) operator()(IfExp &exp);
-  decltype(auto) operator()(TupleExp &exp);
-  decltype(auto) operator()(ProjExp &exp);
+                           std::unique_ptr<Exp> *parentLink, Exp &exp) {
+    addWorklist(parentLink, exp);
+  }
+
+  using RetTy =
+      decltype(std::declval<Visitor>().operator()(std::declval<HaltExp &>()));
+
+#define DISPATCH(GO)                                                           \
+  if constexpr (std::is_same_v<RetTy, void>) {                                 \
+    GO return Visitor::operator()(exp);                                        \
+  } else {                                                                     \
+    auto result = Visitor::operator()(exp);                                    \
+    GO return result;                                                          \
+  }
+
+  decltype(auto) operator()(HaltExp &exp) { return Visitor::operator()(exp); }
+  decltype(auto) operator()(FunExp &exp) {
+    DISPATCH(addWorklist(exp.params, &exp.body, *exp.body);
+             addWorklist(exp.name, &exp.rest, *exp.rest);)
+  }
+  decltype(auto) operator()(JoinExp &exp) {
+    DISPATCH({
+      if (exp.slot) {
+        addWorklist(*exp.slot, &exp.body, *exp.body);
+      } else {
+        addWorklist(&exp.body, *exp.body);
+      }
+      addWorklist(exp.name, &exp.rest, *exp.rest);
+    })
+  }
+  decltype(auto) operator()(JumpExp &exp) { return Visitor::operator()(exp); }
+  decltype(auto) operator()(AppExp &exp) {
+    DISPATCH(addWorklist(exp.name, &exp.rest, *exp.rest);)
+  }
+  decltype(auto) operator()(BopExp &exp) {
+    DISPATCH(addWorklist(exp.name, &exp.rest, *exp.rest);)
+  }
+  decltype(auto) operator()(IfExp &exp) {
+    DISPATCH(addWorklist(&exp.thenBranch, *exp.thenBranch);
+             addWorklist(&exp.elseBranch, *exp.elseBranch);)
+  }
+  decltype(auto) operator()(TupleExp &exp) {
+    DISPATCH(addWorklist(exp.name, &exp.rest, *exp.rest);)
+  }
+  decltype(auto) operator()(ProjExp &exp) {
+    DISPATCH(addWorklist(exp.name, &exp.rest, *exp.rest);)
+  }
 };
 
 class PrintValueVisitor {
@@ -63,11 +109,14 @@ public:
   void operator()(const ProjExp &exp);
 };
 
-struct WorklistTask {
-  std::unique_ptr<Exp> *parentLink;
-  Exp &exp;
-  std::optional<std::function<void(void)>> initializer;
-  std::optional<std::function<void(void)>> finalizer;
+using NodeTask = std::pair<std::unique_ptr<Exp> *, std::reference_wrapper<Exp>>;
+using FnTask = std::function<void(void)>;
+
+struct WorklistTask : std::variant<NodeTask, FnTask> {
+  using variant::variant;
+  WorklistTask(std::unique_ptr<Exp> *parentLink,
+               std::reference_wrapper<Exp> exp)
+      : WorklistTask(std::in_place_index<0>, parentLink, exp) {}
 };
 
 // TODO: this visitor is unnecessary because PrintExpVisitor is already
@@ -78,33 +127,6 @@ struct PrintWorklistVisitor
   PrintWorklistVisitor(std::reference_wrapper<std::ostream> out)
       : WorklistVisitor(out) {}
 };
-
-// Templates for making a nested pack, which does the transformation
-// <T, A, B, C> -> A<B<C<T>>>. This could be useful for defining a pipeline
-// of pattern matching for instruction selection where A, B, and C are sorted
-// at compile time based on their constexpr cost.
-
-template <class T, template <class> class... Types> struct NestedPackHelper;
-
-template <class T> struct NestedPackHelper<T> {
-  typedef T type;
-};
-
-template <class T, template <class> class Head, template <class> class... Tail>
-struct NestedPackHelper<T, Head, Tail...> {
-  typedef Head<typename NestedPackHelper<T, Tail...>::type> type;
-};
-
-template <class T, template <class> class... Types>
-using NestedPack = typename NestedPackHelper<T, Types...>::type;
-
-template <class T>
-using VecDequeVec = NestedPack<T, std::vector, std::deque, std::vector>;
-
-// compiles!
-VecDequeVec<int> makeResult() {
-  return std::vector{std::deque{std::vector{1}}};
-}
 
 } // namespace anf
 } // namespace lambcalc
