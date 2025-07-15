@@ -58,6 +58,8 @@ struct Exp
   convert(std::function<std::unique_ptr<anf::Exp>(anf::Value)> k);
 };
 
+std::unique_ptr<Exp> make(Exp &&exp);
+
 } // namespace ast
 } // namespace lambcalc
 

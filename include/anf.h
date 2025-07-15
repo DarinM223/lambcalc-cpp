@@ -15,6 +15,7 @@ namespace anf {
 struct Value;
 struct Exp;
 
+using Cont = std::function<std::unique_ptr<Exp>(Value)>;
 using Var = std::string;
 
 struct IntValue {
@@ -98,6 +99,7 @@ struct Exp : public std::variant<HaltExp, FunExp, JoinExp, JumpExp, AppExp,
   std::string dump();
 };
 
+std::unique_ptr<Exp> make(Exp &&exp);
 std::unique_ptr<Exp> convert(ast::Exp &exp);
 
 } // namespace anf

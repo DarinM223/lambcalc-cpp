@@ -5,7 +5,19 @@ namespace anf {
 template <typename Visitor, Task T, Worklist<T> W>
 void WorklistVisitor<Visitor, T, W>::addWorklist(
     std::unique_ptr<Exp> *parentLink, Exp &exp) {
-  worklist.push_back(T(parentLink, exp));
+  worklist.push(T(parentLink, exp));
+}
+
+template <typename Visitor, Task T, Worklist<T> W>
+void WorklistVisitor<Visitor, T, W>::addWorklist(
+    const std::string &, std::unique_ptr<Exp> *parentLink, Exp &exp) {
+  addWorklist(parentLink, exp);
+}
+
+template <typename Visitor, Task T, Worklist<T> W>
+void WorklistVisitor<Visitor, T, W>::addWorklist(
+    const std::vector<Var> &, std::unique_ptr<Exp> *parentLink, Exp &exp) {
+  addWorklist(parentLink, exp);
 }
 
 template <typename Visitor, Task T, Worklist<T> W>
@@ -16,16 +28,20 @@ decltype(auto) WorklistVisitor<Visitor, T, W>::operator()(HaltExp &exp) {
 template <typename Visitor, Task T, Worklist<T> W>
 decltype(auto) WorklistVisitor<Visitor, T, W>::operator()(FunExp &exp) {
   auto result = Visitor::operator()(exp);
-  addWorklist(&exp.body, *exp.body);
-  addWorklist(&exp.rest, *exp.rest);
+  addWorklist(exp.params, &exp.body, *exp.body);
+  addWorklist(exp.name, &exp.rest, *exp.rest);
   return result;
 }
 
 template <typename Visitor, Task T, Worklist<T> W>
 decltype(auto) WorklistVisitor<Visitor, T, W>::operator()(JoinExp &exp) {
   auto result = Visitor::operator()(exp);
-  addWorklist(&exp.body, *exp.body);
-  addWorklist(&exp.rest, *exp.rest);
+  if (exp.slot) {
+    addWorklist(*exp.slot, &exp.body, *exp.body);
+  } else {
+    addWorklist(&exp.body, *exp.body);
+  }
+  addWorklist(exp.name, &exp.rest, *exp.rest);
   return result;
 }
 
@@ -37,14 +53,14 @@ decltype(auto) WorklistVisitor<Visitor, T, W>::operator()(JumpExp &exp) {
 template <typename Visitor, Task T, Worklist<T> W>
 decltype(auto) WorklistVisitor<Visitor, T, W>::operator()(AppExp &exp) {
   auto result = Visitor::operator()(exp);
-  addWorklist(&exp.rest, *exp.rest);
+  addWorklist(exp.name, &exp.rest, *exp.rest);
   return result;
 }
 
 template <typename Visitor, Task T, Worklist<T> W>
 decltype(auto) WorklistVisitor<Visitor, T, W>::operator()(BopExp &exp) {
   auto result = Visitor::operator()(exp);
-  addWorklist(&exp.rest, *exp.rest);
+  addWorklist(exp.name, &exp.rest, *exp.rest);
   return result;
 }
 
@@ -59,14 +75,14 @@ decltype(auto) WorklistVisitor<Visitor, T, W>::operator()(IfExp &exp) {
 template <typename Visitor, Task T, Worklist<T> W>
 decltype(auto) WorklistVisitor<Visitor, T, W>::operator()(TupleExp &exp) {
   auto result = Visitor::operator()(exp);
-  addWorklist(&exp.rest, *exp.rest);
+  addWorklist(exp.name, &exp.rest, *exp.rest);
   return result;
 }
 
 template <typename Visitor, Task T, Worklist<T> W>
 decltype(auto) WorklistVisitor<Visitor, T, W>::operator()(ProjExp &exp) {
   auto result = Visitor::operator()(exp);
-  addWorklist(&exp.rest, *exp.rest);
+  addWorklist(exp.name, &exp.rest, *exp.rest);
   return result;
 }
 
@@ -87,7 +103,7 @@ template <typename T> void print_vector(std::ostream &os, std::vector<T> vec) {
   os << "[";
   for (auto it = vec.begin(); it != vec.end(); ++it) {
     os << *it;
-    if (it != vec.end()) {
+    if (it + 1 != vec.end()) {
       os << ", ";
     }
   }
@@ -114,7 +130,7 @@ void PrintExpVisitor::operator()(const FunExp &exp) {
 }
 
 void PrintExpVisitor::operator()(const JoinExp &exp) {
-  out_ << "JoinExp { ";
+  out_ << "JoinExp { " << exp.name << ", ";
   print_optional(out_, exp.slot);
   out_ << ", " << *exp.body << ", " << *exp.rest << " }";
 }
@@ -132,8 +148,20 @@ void PrintExpVisitor::operator()(const AppExp &exp) {
 }
 
 void PrintExpVisitor::operator()(const BopExp &exp) {
-  out_ << "BopExp { " << exp.name << ", " << static_cast<int>(exp.bop) << ", "
-       << exp.param1 << ", " << exp.param2 << ", " << *exp.rest << " }";
+  std::string bop;
+  switch (exp.bop) {
+  case ast::Bop::Plus:
+    bop = "+";
+    break;
+  case ast::Bop::Minus:
+    bop = "-";
+    break;
+  case ast::Bop::Times:
+    bop = "*";
+    break;
+  }
+  out_ << "BopExp { " << exp.name << ", " << bop << ", " << exp.param1 << ", "
+       << exp.param2 << ", " << *exp.rest << " }";
 }
 
 void PrintExpVisitor::operator()(const TupleExp &exp) {

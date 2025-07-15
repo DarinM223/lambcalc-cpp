@@ -2,14 +2,13 @@
 #define VISITOR_H
 
 #include "anf.h"
-#include <deque>
+#include <stack>
 
 namespace lambcalc {
 namespace anf {
 
 template <typename T, typename Task>
-concept Worklist =
-    requires(T worklist, Task task) { worklist.push_back(task); };
+concept Worklist = requires(T worklist, Task task) { worklist.push(task); };
 
 template <typename T>
 concept Task = requires(T task, std::unique_ptr<Exp> *parentLink, Exp &exp) {
@@ -22,7 +21,11 @@ class WorklistVisitor : public Visitor {
 
 public:
   template <class... Args> WorklistVisitor(Args... args) : Visitor(args...) {}
-  void addWorklist(std::unique_ptr<Exp> *parentLink, Exp &exp);
+  virtual void addWorklist(std::unique_ptr<Exp> *parentLink, Exp &exp);
+  virtual void addWorklist(const Var &name, std::unique_ptr<Exp> *parentLink,
+                           Exp &exp);
+  virtual void addWorklist(const std::vector<Var> &name,
+                           std::unique_ptr<Exp> *parentLink, Exp &exp);
   decltype(auto) operator()(HaltExp &exp);
   decltype(auto) operator()(FunExp &exp);
   decltype(auto) operator()(JoinExp &exp);
@@ -71,7 +74,7 @@ struct WorklistTask {
 // recursive, but this is an example of a general use case for a worklist.
 struct PrintWorklistVisitor
     : public WorklistVisitor<PrintExpVisitor, WorklistTask,
-                             std::deque<WorklistTask>> {
+                             std::stack<WorklistTask>> {
   PrintWorklistVisitor(std::reference_wrapper<std::ostream> out)
       : WorklistVisitor(out) {}
 };

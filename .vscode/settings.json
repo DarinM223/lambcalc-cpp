@@ -65,6 +65,13 @@
     "cinttypes": "cpp",
     "typeinfo": "cpp",
     "variant": "cpp",
-    "*.inc": "cpp"
+    "*.inc": "cpp",
+    "charconv": "cpp",
+    "chrono": "cpp",
+    "csignal": "cpp",
+    "forward_list": "cpp",
+    "unordered_set": "cpp",
+    "format": "cpp",
+    "span": "cpp"
   }
 }

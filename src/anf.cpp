@@ -30,7 +30,7 @@ template <StringLiteral lit> struct StringValueVisitor {
 };
 
 struct AnfConvertVisitor {
-  std::function<std::unique_ptr<Exp>(Value)> k;
+  Cont k;
   std::unique_ptr<Exp> operator()(ast::IntExp &exp) {
     return k(IntValue{exp.value});
   }
@@ -39,7 +39,7 @@ struct AnfConvertVisitor {
   }
   std::unique_ptr<Exp> operator()(ast::LamExp &exp) {
     auto name = fresh();
-    return std::make_unique<Exp>(FunExp{
+    return make(FunExp{
         .name = name,
         .params = {exp.param},
         .body = convert(*exp.body),
@@ -52,7 +52,7 @@ struct AnfConvertVisitor {
           std::visit(StringValueVisitor<"function">{}, std::move(fnValue));
       return arg.convert([fnName = std::move(fnName), &k = k](Value argValue) {
         auto name = fresh();
-        return std::make_unique<Exp>(AppExp{
+        return make(AppExp{
             .name = name,
             .funName = fnName,
             .paramValues = {argValue},
@@ -67,7 +67,7 @@ struct AnfConvertVisitor {
           return arg2.convert(
               [bop, arg1Value = std::move(arg1Value), &k = k](Value arg2Value) {
                 auto name = fresh();
-                return std::make_unique<Exp>(BopExp{
+                return make(BopExp{
                     .name = name,
                     .bop = bop,
                     .param1 = arg1Value,
@@ -82,29 +82,30 @@ struct AnfConvertVisitor {
                               &k = k](Value condValue) {
       auto joinName = fresh();
       auto slot = fresh();
-      return std::make_unique<Exp>(JoinExp{
+      return make(JoinExp{
           .name = joinName,
           .slot = std::optional{slot},
           .body = k(VarValue{slot}),
-          .rest = std::make_unique<Exp>(IfExp{
+          .rest = make(IfExp{
               .cond = condValue,
-              .thenBranch =
-                  thenBranch.convert([&joinName = joinName](Value value) {
-                    return std::make_unique<Exp>(
-                        JumpExp{joinName, std::optional{std::move(value)}});
-                  }),
-              .elseBranch =
-                  elseBranch.convert([&joinName = joinName](Value value) {
-                    return std::make_unique<Exp>(
-                        JumpExp{joinName, std::optional{std::move(value)}});
-                  })})});
+              .thenBranch = thenBranch.convert([&joinName =
+                                                    joinName](Value value) {
+                return make(JumpExp{joinName, std::optional{std::move(value)}});
+              }),
+              .elseBranch = elseBranch.convert([&joinName =
+                                                    joinName](Value value) {
+                return make(JumpExp{joinName, std::optional{std::move(value)}});
+              })})});
     });
   }
 };
 
+std::unique_ptr<Exp> make(Exp &&exp) {
+  return std::make_unique<Exp>(std::move(exp));
+}
+
 std::unique_ptr<Exp> convert(ast::Exp &exp) {
-  return exp.convert(
-      [](Value value) { return std::make_unique<Exp>(HaltExp{value}); });
+  return exp.convert([](Value value) { return make(HaltExp{value}); });
 }
 
 std::string Exp::dump() {
@@ -116,8 +117,10 @@ std::string Exp::dump() {
 } // namespace anf
 
 namespace ast {
-std::unique_ptr<anf::Exp>
-Exp::convert(std::function<std::unique_ptr<anf::Exp>(anf::Value)> k) {
+std::unique_ptr<Exp> make(Exp &&exp) {
+  return std::make_unique<Exp>(std::move(exp));
+}
+std::unique_ptr<anf::Exp> Exp::convert(anf::Cont k) {
   return std::visit(anf::AnfConvertVisitor{.k = std::move(k)}, *this);
 }
 } // namespace ast
