@@ -6,15 +6,39 @@ namespace lambcalc {
 namespace convert {
 using namespace anf;
 
-struct FreeVarsVisitor : public WorklistVisitor<DefaultExpVisitor, WorklistTask,
-                                                std::stack<WorklistTask>> {
-  std::set<Var> freeVars;
-  using WorklistVisitor<DefaultExpVisitor, WorklistTask,
-                        std::stack<WorklistTask>>::operator();
+using Pipeline = WorklistVisitor<ExpValueVisitor<DefaultExpVisitor>,
+                                 WorklistTask, std::stack>;
+class FreeVarsVisitor : public Pipeline {
+  std::set<Var> &freeVars;
+
+public:
+  FreeVarsVisitor(std::set<Var> &freeVars) : freeVars(freeVars) {}
+  using Pipeline::operator();
+  using Pipeline::addWorklist;
+
+  void addWorklist(const Var &name, std::unique_ptr<Exp> *parentLink,
+                   Exp &exp) override {
+    getWorklist().emplace(std::in_place_index<1>,
+                          [&]() { freeVars.erase(name); });
+    addWorklist(parentLink, exp);
+  }
+  void addWorklist(const std::vector<Var> &names,
+                   std::unique_ptr<Exp> *parentLink, Exp &exp) override {
+    getWorklist().emplace(std::in_place_index<1>, [&]() {
+      for (auto &v : names) {
+        freeVars.erase(v);
+      }
+    });
+    addWorklist(parentLink, exp);
+  }
+
+  void visitValue(VarValue &value) override { freeVars.insert(value.var); }
+  void visitValue(GlobValue &value) override { freeVars.insert(value.glob); }
 };
 
 std::set<Var> freeVars(Exp &root) {
-  FreeVarsVisitor visitor{};
+  std::set<Var> freeVars;
+  FreeVarsVisitor visitor(freeVars);
   auto worklist = visitor.getWorklist();
   worklist.emplace(nullptr, root);
   while (!worklist.empty()) {
@@ -27,7 +51,7 @@ std::set<Var> freeVars(Exp &root) {
                           [](FnTask &f) { f(); }},
                task);
   }
-  return {};
+  return freeVars;
 }
 
 } // namespace convert
