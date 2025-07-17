@@ -15,4 +15,24 @@ TEST(FreeVars, Simple) {
   EXPECT_EQ(vars, expected);
 }
 
+TEST(FreeVars, FunJoin) {
+  auto exp = make(
+      FunExp{"f",
+             {"a", "b"},
+             make(JoinExp{
+                 "j",
+                 {"c"},
+                 make(TupleExp{
+                     "t",
+                     {VarValue{"b"}, VarValue{"c"}, VarValue{"d"}},
+                     make(ProjExp{"p", "t", 0, make(HaltExp{VarValue{"p"}})})}),
+                 make(BopExp{"x", ast::Bop::Plus, VarValue{"a"}, VarValue{"e"},
+                             make(JumpExp{"j", {GlobValue{"g"}}})})}),
+             make(HaltExp{VarValue{"f"}})});
+  auto set = convert::freeVars(*exp);
+  std::vector<Var> vars(set.begin(), set.end());
+  std::vector<Var> expected{"d", "e", "g"};
+  EXPECT_EQ(vars, expected);
+}
+
 } // namespace lambcalc

@@ -39,12 +39,12 @@ public:
 std::set<Var> freeVars(Exp &root) {
   std::set<Var> freeVars;
   FreeVarsVisitor visitor(freeVars);
-  auto worklist = visitor.getWorklist();
+  auto &worklist = visitor.getWorklist();
   worklist.emplace(nullptr, root);
   while (!worklist.empty()) {
     WorklistTask task = worklist.top();
     worklist.pop();
-    std::visit(overloaded{[&visitor = visitor](NodeTask &n) {
+    std::visit(overloaded{[&](NodeTask &n) {
                             Exp &exp = std::get<1>(n);
                             std::visit(visitor, exp);
                           },
