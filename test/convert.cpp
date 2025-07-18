@@ -35,4 +35,55 @@ TEST(FreeVars, FunJoin) {
   EXPECT_EQ(vars, expected);
 }
 
+TEST(ClosureConvert, Simple) {
+  // let a = 1 + 2 in
+  // let b = 3 * 4 in
+  // let f = fn c d =>
+  //   let e = a + b in
+  //   let g = e + c in
+  //   let h = g * d in
+  //   h
+  // in
+  // let i = f 3 a in
+  // i
+  auto exp = make(BopExp{
+      "a", ast::Bop::Plus, IntValue{1}, IntValue{2},
+      make(BopExp{
+          "b", ast::Bop::Times, IntValue{3}, IntValue{4},
+          make(FunExp{
+              "f",
+              {"c", "d"},
+              make(BopExp{
+                  "e", ast::Bop::Plus, VarValue{"a"}, VarValue{"b"},
+                  make(BopExp{"g", ast::Bop::Plus, VarValue{"e"}, VarValue{"c"},
+                              make(BopExp{"h", ast::Bop::Times, VarValue{"g"},
+                                          VarValue{"d"},
+                                          make(HaltExp{VarValue{"h"}})})})}),
+              make(AppExp{"i",
+                          "f",
+                          {IntValue{3}, VarValue{"a"}},
+                          make(HaltExp{VarValue{"i"}})})})})});
+  auto convert = convert::closureConvert(std::move(exp));
+  // let a = 1 + 2 in
+  // let b = 3 * 4 in
+  // let f = fn closure0 c d =>
+  //   let b = closure0[2] in
+  //   let a = closure0[1] in
+  //   let e = a + b in
+  //   let g = e + c in
+  //   let h = g * d in
+  //   h
+  // in
+  // let f = (f, a, b) in
+  // let proj1 = f[0] in
+  // let i = proj1 f 3 a in
+  // i
+  EXPECT_EQ(convert->dump(),
+            "BopExp { a, +, 1, 2, BopExp { b, *, 3, 4, FunExp { f, [closure0, "
+            "c, d], ProjExp { b, closure0, 2, ProjExp { a, closure0, 1, BopExp "
+            "{ e, +, a, b, BopExp { g, +, e, c, BopExp { h, *, g, d, HaltExp { "
+            "h } } } } } }, TupleExp { f, [f, a, b], ProjExp { proj1, f, 0, "
+            "AppExp { i, proj1, [f, 3, a], HaltExp { i } } } } } } }");
+}
+
 } // namespace lambcalc
