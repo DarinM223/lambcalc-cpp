@@ -50,19 +50,19 @@ include_directories(
 )
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Werror -g -fsanitize=address")
-set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD 23)
 
 include_directories(include/)
 
-file(GLOB_RECURSE SOURCES src/main.cpp src/anf.cpp src/visitor.cpp src/convert.cpp)
-file(GLOB_RECURSE TEST_SOURCES test/main.cpp test/anf.cpp test/convert.cpp)
+file(GLOB_RECURSE SOURCES src/main.cpp src/anf.cpp src/visitor.cpp src/convert.cpp src/hoist.cpp)
+file(GLOB_RECURSE TEST_SOURCES test/main.cpp test/anf.cpp test/convert.cpp test/hoist.cpp)
 
 add_executable(lambcalc ${SOURCES})
 target_link_libraries(lambcalc PRIVATE LLVM)
-target_compile_features(lambcalc PUBLIC cxx_std_20)
+target_compile_features(lambcalc PUBLIC cxx_std_23)
 
 add_library(lambcalc-lib ${SOURCES})
-target_compile_features(lambcalc-lib PUBLIC cxx_std_20)
+target_compile_features(lambcalc-lib PUBLIC cxx_std_23)
 
 add_executable(lambcalc-test ${TEST_SOURCES})
 add_dependencies(lambcalc-test libgtest libgmock)

@@ -93,7 +93,7 @@ std::set<Var> freeVars(Exp &root) {
   auto &worklist = visitor.getWorklist();
   worklist.emplace(nullptr, root);
   while (!worklist.empty()) {
-    WorklistTask task = worklist.top();
+    auto task = std::move(worklist.top());
     worklist.pop();
     std::visit(overloaded{[&](NodeTask &n) {
                             Exp &exp = std::get<1>(n);
@@ -111,7 +111,7 @@ std::unique_ptr<Exp> closureConvert(std::unique_ptr<Exp> &&start) {
   auto root = std::move(start);
   worklist.emplace(&root, *root);
   while (!worklist.empty()) {
-    auto task = worklist.top();
+    auto task = std::move(worklist.top());
     worklist.pop();
     std::visit(overloaded{[&](NodeTask &n) {
                             auto [parent, exp] = n;

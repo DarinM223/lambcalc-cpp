@@ -155,7 +155,7 @@ public:
 };
 
 using NodeTask = std::pair<std::unique_ptr<Exp> *, std::reference_wrapper<Exp>>;
-using FnTask = std::function<void(void)>;
+using FnTask = std::move_only_function<void(void)>;
 
 struct WorklistTask : std::variant<NodeTask, FnTask> {
   using variant::variant;
