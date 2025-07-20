@@ -82,7 +82,7 @@ public:
     auto appData = AppExp{std::move(exp.name), projName, std::move(paramValues),
                           std::move(exp.rest)};
     addWorklist(&appData.rest, *appData.rest);
-    auto app = std::make_unique<Exp>(std::move(appData));
+    auto app = make(std::move(appData));
     *parentLink = make(ProjExp{projName, exp.funName, 0, std::move(app)});
   }
 };

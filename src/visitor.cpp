@@ -1,4 +1,5 @@
 #include "visitor.h"
+
 namespace lambcalc {
 namespace anf {
 
