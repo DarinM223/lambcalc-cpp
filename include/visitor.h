@@ -19,6 +19,23 @@ struct DefaultExpVisitor {
   void operator()(auto &) {}
 };
 
+template <typename Visitor> struct MatchIfJump : public Visitor {
+  using RetTy =
+      decltype(std::declval<Visitor>().operator()(std::declval<IfExp &>()));
+  using Visitor::operator();
+  template <class... Args> MatchIfJump(Args... args) : Visitor(args...) {}
+  RetTy operator()(IfExp &exp) {
+    JumpExp *thenJump, *elseJump;
+    if ((thenJump = std::get_if<JumpExp>(&*exp.thenBranch)) &&
+        (elseJump = std::get_if<JumpExp>(&*exp.elseBranch))) {
+      return visitIfJump(exp, *thenJump, *elseJump);
+    }
+    return Visitor::operator()(exp);
+  }
+  virtual RetTy visitIfJump(IfExp &exp, JumpExp &thenJump,
+                            JumpExp &elseJump) = 0;
+};
+
 template <typename Visitor, Task T, template <class> class W>
   requires Worklist<W<T>, T>
 class WorklistVisitor : public Visitor {
@@ -41,6 +58,7 @@ public:
 
   using RetTy =
       decltype(std::declval<Visitor>().operator()(std::declval<HaltExp &>()));
+  using Visitor::operator();
 
 #define DISPATCH(GO)                                                           \
   if constexpr (std::is_same_v<RetTy, void>) {                                 \

@@ -10,31 +10,31 @@ using namespace anf;
 using FreeVarsPipeline = WorklistVisitor<ExpValueVisitor<DefaultExpVisitor>,
                                          WorklistTask, std::stack>;
 class FreeVarsVisitor : public FreeVarsPipeline {
-  std::set<Var> &freeVars;
+  std::set<Var> &freeVars_;
 
 public:
-  FreeVarsVisitor(std::set<Var> &freeVars) : freeVars(freeVars) {}
+  FreeVarsVisitor(std::set<Var> &freeVars) : freeVars_(freeVars) {}
   using FreeVarsPipeline::operator();
   using FreeVarsPipeline::addWorklist;
 
   void addWorklist(const Var &name, std::unique_ptr<Exp> *parentLink,
                    Exp &exp) override {
     getWorklist().emplace(std::in_place_index<1>,
-                          [&]() { freeVars.erase(name); });
+                          [&]() { freeVars_.erase(name); });
     addWorklist(parentLink, exp);
   }
   void addWorklist(const std::vector<Var> &names,
                    std::unique_ptr<Exp> *parentLink, Exp &exp) override {
     getWorklist().emplace(std::in_place_index<1>, [&]() {
       for (auto &v : names) {
-        freeVars.erase(v);
+        freeVars_.erase(v);
       }
     });
     addWorklist(parentLink, exp);
   }
 
-  void visitValue(VarValue &value) override { freeVars.insert(value.var); }
-  void visitValue(GlobValue &value) override { freeVars.insert(value.glob); }
+  void visitValue(VarValue &value) override { freeVars_.insert(value.var); }
+  void visitValue(GlobValue &value) override { freeVars_.insert(value.glob); }
 };
 
 using ClosureConvertPipeline =

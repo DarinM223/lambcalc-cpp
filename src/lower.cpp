@@ -1,0 +1,188 @@
+#include "lower.h"
+#include "utils.h"
+#include "visitor.h"
+#include "llvm/IR/GlobalValue.h"
+#include "llvm/Passes/PassBuilder.h"
+
+namespace lambcalc {
+namespace anf {
+
+using namespace llvm;
+
+using LLVMLowerPipeline =
+    WorklistVisitor<MatchIfJump<ExpValueVisitor<DefaultExpVisitor>>,
+                    WorklistTask, std::stack>;
+class LLVMLowerVisitor : public LLVMLowerPipeline {
+  LLVMContext &ctx_;
+  Module &module_;
+  IRBuilder<> &builder_;
+  llvm::Value *value_;
+  llvm::StringMap<llvm::AllocaInst *> &spillSlots_;
+  llvm::StringMap<llvm::Value *> &namedValues_;
+  llvm::StringMap<llvm::BasicBlock *> &namedBlocks_;
+
+public:
+  LLVMLowerVisitor(LLVMContext &ctx, Module &module, IRBuilder<> &builder,
+                   llvm::StringMap<llvm::AllocaInst *> &spillSlots,
+                   llvm::StringMap<llvm::Value *> &namedValues,
+                   llvm::StringMap<llvm::BasicBlock *> &namedBlocks)
+      : ctx_(ctx), module_(module), builder_(builder), value_(nullptr),
+        spillSlots_(spillSlots), namedValues_(namedValues),
+        namedBlocks_(namedBlocks) {}
+  using LLVMLowerPipeline::operator();
+  void visitValue(IntValue &value) { value_ = builder_.getInt64(value.value); }
+  void visitValue(VarValue &value) { value_ = namedValues_.lookup(value.var); }
+  void visitValue(GlobValue &value) {
+    llvm::Function *function;
+    llvm::GlobalVariable *global;
+    if ((function = module_.getFunction(value.glob))) {
+      value_ = builder_.CreatePtrToInt(function, builder_.getInt64Ty());
+    } else if ((global = module_.getGlobalVariable(value.glob))) {
+      value_ = builder_.CreatePtrToInt(global, builder_.getInt64Ty());
+    } else {
+      value_ = module_.getOrInsertGlobal(value.glob, builder_.getInt64Ty());
+    }
+  }
+
+  void operator()(HaltExp &exp) {
+    std::visit(*this, exp.value);
+    builder_.CreateRet(value_);
+  }
+  void operator()(JumpExp &exp) {
+    auto block = namedBlocks_.lookup(exp.joinName);
+    if (exp.slotValue) {
+      auto slot = spillSlots_[exp.joinName];
+      std::visit(*this, *exp.slotValue);
+      builder_.CreateStore(value_, slot);
+    }
+    builder_.CreateBr(block);
+  }
+  void operator()(AppExp &exp) {}
+  void operator()(BopExp &exp) {
+    std::visit(*this, exp.param1);
+    auto param1 = value_;
+    std::visit(*this, exp.param2);
+    auto param2 = value_;
+    llvm::Instruction::BinaryOps bop;
+    switch (exp.bop) {
+    case ast::Bop::Plus:
+      bop = llvm::Instruction::BinaryOps::Add;
+      break;
+    case ast::Bop::Minus:
+      bop = llvm::Instruction::BinaryOps::Sub;
+      break;
+    case ast::Bop::Times:
+      bop = llvm::Instruction::BinaryOps::Mul;
+      break;
+    }
+    namedValues_[exp.name] =
+        builder_.CreateBinOp(bop, param1, param2, exp.name);
+  }
+  void operator()(TupleExp &exp) {
+    auto mallocTy =
+        FunctionType::get(builder_.getPtrTy(), builder_.getInt64Ty(), false);
+    auto malloc = module_.getOrInsertFunction("malloc", mallocTy);
+    auto ptr = builder_.CreateCall(
+        malloc, {builder_.getInt64(exp.values.size() * 8)}, exp.name);
+    namedValues_[exp.name] =
+        builder_.CreatePtrToInt(ptr, builder_.getInt64Ty());
+    for (size_t i = 0; i < exp.values.size(); ++i) {
+      auto value = exp.values[i];
+      // getElementPtr just returns the address based off of indexing the
+      // pointer. That address can be used for a store instruction.
+      auto gep = builder_.CreateGEP(builder_.getInt64Ty(), ptr,
+                                    {builder_.getInt64(i)});
+      std::visit(*this, value);
+      builder_.CreateStore(value_, gep);
+    }
+  }
+  void operator()(ProjExp &exp) {
+    auto tupleInt = namedValues_[exp.tuple];
+    auto tuplePtr = builder_.CreateIntToPtr(tupleInt, builder_.getPtrTy());
+    auto gep = builder_.CreateGEP(builder_.getInt64Ty(), tuplePtr,
+                                  {builder_.getInt64(exp.index)});
+    namedValues_[exp.name] =
+        builder_.CreateLoad(builder_.getInt64Ty(), gep, exp.name);
+  }
+
+  void visitIfJump(IfExp &exp, JumpExp &thenJump, JumpExp &elseJump) override {
+    std::visit(*this, exp.cond);
+    auto cond = builder_.CreateICmpNE(value_, builder_.getInt64(0));
+    if (thenJump.slotValue) {
+      builder_.CreateStore(value_, spillSlots_[thenJump.joinName]);
+    }
+    if (elseJump.slotValue) {
+      builder_.CreateStore(value_, spillSlots_[elseJump.joinName]);
+    }
+    builder_.CreateCondBr(cond, namedBlocks_[thenJump.joinName],
+                          namedBlocks_[elseJump.joinName]);
+  }
+};
+
+static void lowerBlock(LLVMLowerVisitor &visitor, Join &block) {
+  auto &worklist = visitor.getWorklist();
+  worklist.emplace(&block.body, *block.body);
+  while (!worklist.empty()) {
+    auto task = std::move(worklist.top());
+    worklist.pop();
+    std::visit(overloaded{[&](NodeTask &task) {
+                            auto [parent, exp] = task;
+                            std::visit(visitor, static_cast<Exp &>(exp));
+                          },
+                          [](FnTask &fn) { fn(); }},
+               task);
+  }
+}
+
+std::unique_ptr<Module> lower(std::vector<Function> &&fns) {
+  auto ctx = std::make_unique<LLVMContext>();
+  auto module = std::make_unique<Module>("lambcalc program", *ctx);
+  auto builder = std::make_unique<IRBuilder<>>(*ctx);
+  for (auto &fn : fns) {
+    // getPtrTy() gets an opaque pointer, which is preferred for modern LLVM
+    // than a typed pointer.
+    std::vector<Type *> tys{builder->getPtrTy()};
+    std::ranges::for_each(std::as_const(fn.params), [&](auto &) {
+      tys.push_back(builder->getInt64Ty());
+    });
+    auto ty = llvm::FunctionType::get(builder->getInt64Ty(), tys, false);
+    llvm::Function::Create(ty, llvm::GlobalValue::ExternalLinkage, fn.name,
+                           *module);
+  }
+  for (auto &fn : fns) {
+    StringMap<llvm::AllocaInst *> spillSlots;
+    StringMap<llvm::Value *> namedValues;
+    StringMap<llvm::BasicBlock *> namedBlocks;
+    LLVMLowerVisitor visitor(*ctx, *module, *builder, spillSlots, namedValues,
+                             namedBlocks);
+
+    auto loweredFn = module->getFunction(fn.name);
+    auto loweredEntryBlock =
+        BasicBlock::Create(*ctx, fn.entryBlock.name, loweredFn);
+    namedBlocks[fn.entryBlock.name] = loweredEntryBlock;
+    builder->SetInsertPoint(loweredEntryBlock);
+    // preprocess spill slots
+    for (auto &block : fn.blocks) {
+      if (block.slot) {
+        spillSlots[block.name] = builder->CreateAlloca(builder->getInt64Ty());
+      }
+    }
+
+    lowerBlock(visitor, fn.entryBlock);
+    for (auto &block : fn.blocks) {
+      auto loweredBlock = BasicBlock::Create(*ctx, block.name, loweredFn);
+      namedBlocks[block.name] = loweredBlock;
+      builder->SetInsertPoint(loweredBlock);
+      if (block.slot) {
+        auto slot = spillSlots[block.name];
+        namedValues[*block.slot] =
+            builder->CreateLoad(builder->getInt64Ty(), slot);
+      }
+      lowerBlock(visitor, block);
+    }
+  }
+  return module;
+}
+
+} // namespace anf
+} // namespace lambcalc

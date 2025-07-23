@@ -9,9 +9,9 @@ using HoistPipeline =
     WorklistVisitor<DefaultExpVisitor, WorklistTask, std::stack>;
 class HoistVisitor : public HoistPipeline {
   int counter_;
-  std::vector<Join> currentJoins;
-  std::vector<Function> collected;
-  std::unique_ptr<Exp> *parentLink;
+  std::vector<Join> currentJoins_;
+  std::vector<Function> collected_;
+  std::unique_ptr<Exp> *parentLink_;
 
   Var fresh(std::string_view prefix) {
     return prefix.data() + std::to_string(counter_++);
@@ -21,19 +21,19 @@ public:
   using HoistPipeline::operator();
   HoistVisitor() : counter_(0) {}
   void setParentLink(std::unique_ptr<Exp> *parentLink) {
-    this->parentLink = parentLink;
+    parentLink_ = parentLink;
   }
   std::vector<Function> moveOutCollectedFunctions() {
-    return std::move(collected);
+    return std::move(collected_);
   }
   void operator()(FunExp &exp) {
     std::vector<Join> savedJoins;
-    std::swap(currentJoins, savedJoins);
+    std::swap(currentJoins_, savedJoins);
     // First save the current joins, recurse into body, then collect
     // the current joins into a function, then recurse into the rest.
     // NOTE: ordering is reversed since it is the order in which
     // tasks are pushed to the stack.
-    auto savedParentLink = parentLink;
+    auto savedParentLink = parentLink_;
     getWorklist().emplace(std::in_place_index<1>, [savedParentLink, &exp]() {
       if (savedParentLink)
         *savedParentLink = std::move(exp.rest);
@@ -43,23 +43,23 @@ public:
         std::in_place_index<1>,
         [&, savedJoins = std::move(savedJoins)]() mutable {
           Join entryBlock{fresh("entry"), std::nullopt, std::move(exp.body)};
-          collected.emplace_back(std::move(exp.name), std::move(exp.params),
-                                 std::move(entryBlock),
-                                 std::move(currentJoins));
-          currentJoins = std::move(savedJoins);
+          collected_.emplace_back(std::move(exp.name), std::move(exp.params),
+                                  std::move(entryBlock),
+                                  std::move(currentJoins_));
+          currentJoins_ = std::move(savedJoins);
         });
     addWorklist(&exp.body, *exp.body);
   }
   void operator()(JoinExp &exp) {
-    auto savedParentLink = parentLink;
+    auto savedParentLink = parentLink_;
     getWorklist().emplace(std::in_place_index<1>, [savedParentLink, &exp]() {
       if (savedParentLink)
         *savedParentLink = std::move(exp.rest);
     });
     addWorklist(&exp.rest, *exp.rest);
     getWorklist().emplace(std::in_place_index<1>, [&]() {
-      currentJoins.emplace_back(std::move(exp.name), std::move(exp.slot),
-                                std::move(exp.body));
+      currentJoins_.emplace_back(std::move(exp.name), std::move(exp.slot),
+                                 std::move(exp.body));
     });
     addWorklist(&exp.body, *exp.body);
   }
@@ -67,10 +67,10 @@ public:
     getWorklist().emplace(std::in_place_index<1>, [&]() {
       auto thenBlockName = fresh("then");
       auto elseBlockName = fresh("else");
-      currentJoins.emplace_back(thenBlockName, std::nullopt,
-                                std::move(exp.thenBranch));
-      currentJoins.emplace_back(elseBlockName, std::nullopt,
-                                std::move(exp.elseBranch));
+      currentJoins_.emplace_back(thenBlockName, std::nullopt,
+                                 std::move(exp.thenBranch));
+      currentJoins_.emplace_back(elseBlockName, std::nullopt,
+                                 std::move(exp.elseBranch));
       exp.thenBranch = make(JumpExp{thenBlockName, std::nullopt});
       exp.elseBranch = make(JumpExp{elseBlockName, std::nullopt});
     });
