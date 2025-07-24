@@ -57,7 +57,16 @@ public:
     }
     builder_.CreateBr(block);
   }
-  void operator()(AppExp &exp) {}
+  void operator()(AppExp &exp) {
+    auto fn = module_.getFunction(exp.funName);
+    std::vector<llvm::Value *> params;
+    for (auto &val : exp.paramValues) {
+      std::visit(*this, val);
+      params.push_back(value_);
+    }
+    namedValues_[exp.name] = builder_.CreateCall(fn, params, exp.name);
+    return LLVMLowerPipeline::operator()(exp);
+  }
   void operator()(BopExp &exp) {
     std::visit(*this, exp.param1);
     auto param1 = value_;
@@ -77,6 +86,7 @@ public:
     }
     namedValues_[exp.name] =
         builder_.CreateBinOp(bop, param1, param2, exp.name);
+    return LLVMLowerPipeline::operator()(exp);
   }
   void operator()(TupleExp &exp) {
     auto mallocTy =
@@ -95,6 +105,7 @@ public:
       std::visit(*this, value);
       builder_.CreateStore(value_, gep);
     }
+    return LLVMLowerPipeline::operator()(exp);
   }
   void operator()(ProjExp &exp) {
     auto tupleInt = namedValues_[exp.tuple];
@@ -103,6 +114,7 @@ public:
                                   {builder_.getInt64(exp.index)});
     namedValues_[exp.name] =
         builder_.CreateLoad(builder_.getInt64Ty(), gep, exp.name);
+    return LLVMLowerPipeline::operator()(exp);
   }
 
   void visitIfJump(IfExp &exp, JumpExp &thenJump, JumpExp &elseJump) override {
@@ -134,17 +146,25 @@ static void lowerBlock(LLVMLowerVisitor &visitor, Join &block) {
   }
 }
 
+// Context needs a global scope or else if it gets freed
+// it takes the module with it.
+static std::unique_ptr<LLVMContext> ctx;
+
 std::unique_ptr<Module> lower(std::vector<Function> &&fns) {
-  auto ctx = std::make_unique<LLVMContext>();
+  ctx = std::make_unique<LLVMContext>();
   auto module = std::make_unique<Module>("lambcalc program", *ctx);
   auto builder = std::make_unique<IRBuilder<>>(*ctx);
   for (auto &fn : fns) {
     // getPtrTy() gets an opaque pointer, which is preferred for modern LLVM
     // than a typed pointer.
-    std::vector<Type *> tys{builder->getPtrTy()};
-    std::ranges::for_each(std::as_const(fn.params), [&](auto &) {
-      tys.push_back(builder->getInt64Ty());
-    });
+    std::vector<Type *> tys;
+    for (size_t i = 0; i < fn.params.size(); ++i) {
+      if (i == 0) {
+        tys.push_back(builder->getPtrTy());
+      } else {
+        tys.push_back(builder->getInt64Ty());
+      }
+    }
     auto ty = llvm::FunctionType::get(builder->getInt64Ty(), tys, false);
     llvm::Function::Create(ty, llvm::GlobalValue::ExternalLinkage, fn.name,
                            *module);
@@ -161,22 +181,28 @@ std::unique_ptr<Module> lower(std::vector<Function> &&fns) {
         BasicBlock::Create(*ctx, fn.entryBlock.name, loweredFn);
     namedBlocks[fn.entryBlock.name] = loweredEntryBlock;
     builder->SetInsertPoint(loweredEntryBlock);
-    // preprocess spill slots
     for (auto &block : fn.blocks) {
+      auto loweredBlock = BasicBlock::Create(*ctx, block.name, loweredFn);
+      namedBlocks[block.name] = loweredBlock;
+      // preprocess spill slots
       if (block.slot) {
         spillSlots[block.name] = builder->CreateAlloca(builder->getInt64Ty());
       }
     }
+    size_t i = 0;
+    for (auto &arg : loweredFn->args()) {
+      const std::string &param = fn.params[i++];
+      arg.setName(param);
+    }
 
     lowerBlock(visitor, fn.entryBlock);
     for (auto &block : fn.blocks) {
-      auto loweredBlock = BasicBlock::Create(*ctx, block.name, loweredFn);
-      namedBlocks[block.name] = loweredBlock;
+      auto loweredBlock = namedBlocks[block.name];
       builder->SetInsertPoint(loweredBlock);
       if (block.slot) {
         auto slot = spillSlots[block.name];
         namedValues[*block.slot] =
-            builder->CreateLoad(builder->getInt64Ty(), slot);
+            builder->CreateLoad(builder->getInt64Ty(), slot, *block.slot);
       }
       lowerBlock(visitor, block);
     }
