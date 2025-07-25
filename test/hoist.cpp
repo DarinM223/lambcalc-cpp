@@ -102,4 +102,16 @@ TEST(Hoist, FunJoin) {
   EXPECT_EQ(collected[2].blocks.size(), static_cast<size_t>(0));
 }
 
+TEST(Hoist, IfElse) {
+  auto exp =
+      make(IfExp{IntValue{1},
+                 make(IfExp{IntValue{0}, make(HaltExp{IntValue{2}}),
+                            make(HaltExp{IntValue{4}})}),
+                 make(BopExp{"a", ast::Bop::Plus, IntValue{1}, IntValue{2},
+                             make(HaltExp{VarValue{"a"}})})});
+  auto collected = anf::hoist(std::move(exp));
+  EXPECT_EQ(collected.size(), static_cast<size_t>(1));
+  EXPECT_EQ(collected[0].blocks.size(), static_cast<size_t>(4));
+}
+
 } // namespace lambcalc

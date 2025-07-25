@@ -2,6 +2,7 @@
 #include "utils.h"
 #include "visitor.h"
 #include "llvm/IR/GlobalValue.h"
+#include "llvm/IR/Verifier.h"
 #include "llvm/Passes/PassBuilder.h"
 
 namespace lambcalc {
@@ -193,6 +194,7 @@ std::unique_ptr<Module> lower(std::vector<Function> &&fns) {
     for (auto &arg : loweredFn->args()) {
       const std::string &param = fn.params[i++];
       arg.setName(param);
+      namedValues[param] = &arg;
     }
 
     lowerBlock(visitor, fn.entryBlock);
@@ -206,6 +208,7 @@ std::unique_ptr<Module> lower(std::vector<Function> &&fns) {
       }
       lowerBlock(visitor, block);
     }
+    llvm::verifyFunction(*loweredFn);
   }
   return module;
 }
