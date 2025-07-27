@@ -4,6 +4,12 @@
 #include "llvm/IR/GlobalValue.h"
 #include "llvm/IR/Verifier.h"
 #include "llvm/Passes/PassBuilder.h"
+#include "llvm/Passes/StandardInstrumentations.h"
+#include "llvm/Transforms/InstCombine/InstCombine.h"
+#include "llvm/Transforms/Scalar/GVN.h"
+#include "llvm/Transforms/Scalar/Reassociate.h"
+#include "llvm/Transforms/Scalar/SimplifyCFG.h"
+#include "llvm/Transforms/Utils/Mem2Reg.h"
 
 namespace lambcalc {
 namespace anf {
@@ -150,9 +156,36 @@ static void lowerBlock(LLVMLowerVisitor &visitor, Join &block) {
 // Context needs a global scope or else if it gets freed
 // it takes the module with it.
 static std::unique_ptr<LLVMContext> ctx;
+static std::unique_ptr<LoopAnalysisManager> lam;
+static std::unique_ptr<FunctionPassManager> fpm;
+static std::unique_ptr<FunctionAnalysisManager> fam;
+static std::unique_ptr<CGSCCAnalysisManager> cgam;
+static std::unique_ptr<ModuleAnalysisManager> mam;
+static std::unique_ptr<PassInstrumentationCallbacks> pic;
+static std::unique_ptr<StandardInstrumentations> si;
 
 std::unique_ptr<Module> lower(std::vector<Function> &&fns) {
   ctx = std::make_unique<LLVMContext>();
+  fpm = std::make_unique<FunctionPassManager>();
+  lam = std::make_unique<LoopAnalysisManager>();
+  fam = std::make_unique<FunctionAnalysisManager>();
+  cgam = std::make_unique<CGSCCAnalysisManager>();
+  mam = std::make_unique<ModuleAnalysisManager>();
+  pic = std::make_unique<PassInstrumentationCallbacks>();
+  si = std::make_unique<StandardInstrumentations>(*ctx, true);
+  si->registerCallbacks(*pic, mam.get());
+
+  fpm->addPass(PromotePass());
+  fpm->addPass(InstCombinePass());
+  fpm->addPass(ReassociatePass());
+  fpm->addPass(GVNPass());
+  fpm->addPass(SimplifyCFGPass());
+
+  PassBuilder PB;
+  PB.registerModuleAnalyses(*mam);
+  PB.registerFunctionAnalyses(*fam);
+  PB.crossRegisterProxies(*lam, *fam, *cgam, *mam);
+
   auto module = std::make_unique<Module>("lambcalc program", *ctx);
   auto builder = std::make_unique<IRBuilder<>>(*ctx);
   for (auto &fn : fns) {

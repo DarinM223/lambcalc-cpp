@@ -5,4 +5,5 @@ Makefile
 lambcalc
 lambcalc-test
 googletest-prefix/
+build/
 *.a

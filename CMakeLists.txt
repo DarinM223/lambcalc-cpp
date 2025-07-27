@@ -49,13 +49,30 @@ include_directories(
     ${CMAKE_SOURCE_DIR}/src
 )
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Werror -g -fsanitize=address,leak")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Werror -g -fsanitize=address,leak,undefined")
 set(CMAKE_CXX_STANDARD 23)
 
 include_directories(include/)
 
-file(GLOB_RECURSE SOURCES src/main.cpp src/anf.cpp src/visitor.cpp src/convert.cpp src/hoist.cpp src/lower.cpp)
-file(GLOB_RECURSE TEST_SOURCES test/main.cpp test/anf.cpp test/convert.cpp test/hoist.cpp test/lower.cpp)
+file(
+    GLOB_RECURSE SOURCES
+    src/main.cpp
+    src/anf.cpp
+    src/visitor.cpp
+    src/convert.cpp
+    src/hoist.cpp
+    src/lower.cpp
+    src/lexer.cpp
+)
+file(
+    GLOB_RECURSE TEST_SOURCES
+    test/main.cpp
+    test/anf.cpp
+    test/convert.cpp
+    test/hoist.cpp
+    test/lower.cpp
+    test/lexer.cpp
+)
 
 add_executable(lambcalc ${SOURCES})
 target_link_libraries(lambcalc PRIVATE LLVM)
