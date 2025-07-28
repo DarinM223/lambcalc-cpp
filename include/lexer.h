@@ -14,6 +14,11 @@ enum class Token {
   If = -6,
   Then = -7,
   Else = -8,
+  LParen = '(',
+  RParen = ')',
+  Plus = '+',
+  Minus = '-',
+  Times = '*',
 };
 
 class Lexer {

@@ -63,6 +63,7 @@ file(
     src/hoist.cpp
     src/lower.cpp
     src/lexer.cpp
+    src/parser.cpp
 )
 file(
     GLOB_RECURSE TEST_SOURCES
