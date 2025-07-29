@@ -54,6 +54,9 @@ struct IfExp {
 struct Exp
     : public std::variant<IntExp, VarExp, LamExp, AppExp, BopExp, IfExp> {
   using variant::variant;
+  friend std::ostream &operator<<(std::ostream &os, const Exp &exp);
+  std::string dump();
+
   std::unique_ptr<anf::Exp>
   convert(std::function<std::unique_ptr<anf::Exp>(anf::Value)> k);
 };

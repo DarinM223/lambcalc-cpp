@@ -5,6 +5,24 @@
 #include <stack>
 
 namespace lambcalc {
+
+namespace ast {
+
+class PrintExpVisitor {
+  std::ostream &out_;
+
+public:
+  PrintExpVisitor(std::reference_wrapper<std::ostream> out) : out_(out) {}
+  void operator()(const IntExp &exp);
+  void operator()(const VarExp &exp);
+  void operator()(const LamExp &exp);
+  void operator()(const AppExp &exp);
+  void operator()(const BopExp &exp);
+  void operator()(const IfExp &exp);
+};
+
+} // namespace ast
+
 namespace anf {
 
 template <typename T, typename Task>

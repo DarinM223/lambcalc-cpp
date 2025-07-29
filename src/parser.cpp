@@ -30,13 +30,13 @@ std::unique_ptr<ast::Exp> Parser::parseFn() {
 
 std::unique_ptr<ast::Exp> Parser::parseIf() {
   auto cond = parseExpression();
+  nextToken();
   assert(getCurrentToken() == Token::Then &&
          "Expected then after if condition");
-  nextToken();
   auto then = parseExpression();
+  nextToken();
   assert(getCurrentToken() == Token::Else &&
          "Expected else after then expression");
-  nextToken();
   auto els = parseExpression();
   return ast::make(
       ast::IfExp{std::move(cond), std::move(then), std::move(els)});
@@ -72,8 +72,9 @@ std::unique_ptr<ast::Exp> Parser::parseBinOp(int minBP) {
   nextToken();
   std::unique_ptr<ast::Exp> lhs = parsePrimary();
 
+  int appLbp = 100, appRbp = 101;
   while (true) {
-    Token token = getCurrentToken();
+    Token token = peekToken();
     std::optional<ast::Bop> bop;
     if ((bop = parseOp(token))) {
       std::optional<std::pair<int, int>> bp;
@@ -89,11 +90,17 @@ std::unique_ptr<ast::Exp> Parser::parseBinOp(int minBP) {
       } else {
         return lhs;
       }
-    } else if (token == Token::Eof) {
-      return lhs;
+    } else if (token == Token::LParen || token == Token::Number ||
+               token == Token::Identifier) {
+      // If lookahead is '(', variable, or number, apply function application.
+      if (appLbp < minBP) {
+        return lhs;
+      }
+
+      auto rhs = parseBinOp(appRbp);
+      lhs = ast::make(ast::AppExp{std::move(lhs), std::move(rhs)});
     } else {
-      throw std::runtime_error("Invalid token: " +
-                               std::to_string(static_cast<int>(token)));
+      return lhs;
     }
   }
 }

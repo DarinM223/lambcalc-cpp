@@ -106,11 +106,20 @@ std::string Exp::dump() {
 } // namespace anf
 
 namespace ast {
+
 std::unique_ptr<Exp> make(Exp &&exp) {
   return std::make_unique<Exp>(std::move(exp));
 }
+
 std::unique_ptr<anf::Exp> Exp::convert(anf::Cont k) {
   return std::visit(anf::AnfConvertVisitor{.k = std::move(k)}, *this);
 }
+
+std::string Exp::dump() {
+  std::ostringstream out;
+  out << *this;
+  return out.str();
+}
+
 } // namespace ast
 } // namespace lambcalc

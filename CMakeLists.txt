@@ -73,6 +73,7 @@ file(
     test/hoist.cpp
     test/lower.cpp
     test/lexer.cpp
+    test/parser.cpp
 )
 
 add_executable(lambcalc ${SOURCES})
