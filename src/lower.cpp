@@ -3,8 +3,6 @@
 #include "visitor.h"
 #include "llvm/IR/GlobalValue.h"
 #include "llvm/IR/Verifier.h"
-#include "llvm/Passes/PassBuilder.h"
-#include "llvm/Passes/StandardInstrumentations.h"
 #include "llvm/Transforms/InstCombine/InstCombine.h"
 #include "llvm/Transforms/Scalar/GVN.h"
 #include "llvm/Transforms/Scalar/Reassociate.h"
@@ -12,13 +10,28 @@
 #include "llvm/Transforms/Utils/Mem2Reg.h"
 
 namespace lambcalc {
-namespace anf {
+namespace lower {
 
 using namespace llvm;
+using namespace anf;
+
+template <typename T>
+llvm::FunctionType *getFunctionType(IRBuilder<> &builder,
+                                    const std::vector<T> &params) {
+  std::vector<Type *> tys;
+  for (size_t i = 0; i < params.size(); ++i) {
+    if (i == 0) {
+      tys.push_back(builder.getPtrTy());
+    } else {
+      tys.push_back(builder.getInt64Ty());
+    }
+  }
+  return llvm::FunctionType::get(builder.getInt64Ty(), tys, false);
+}
 
 using LLVMLowerPipeline =
-    WorklistVisitor<MatchIfJump<ExpValueVisitor<DefaultExpVisitor>>,
-                    WorklistTask, std::stack>;
+    MatchIfJump<WorklistVisitor<ExpValueVisitor<DefaultExpVisitor>,
+                                WorklistTask, std::stack>>;
 class LLVMLowerVisitor : public LLVMLowerPipeline {
   LLVMContext &ctx_;
   Module &module_;
@@ -65,13 +78,21 @@ public:
     builder_.CreateBr(block);
   }
   void operator()(AppExp &exp) {
-    auto fn = module_.getFunction(exp.funName);
     std::vector<llvm::Value *> params;
     for (auto &val : exp.paramValues) {
       std::visit(*this, val);
       params.push_back(value_);
     }
-    namedValues_[exp.name] = builder_.CreateCall(fn, params, exp.name);
+    if (namedValues_.contains(exp.funName)) {
+      auto fty = getFunctionType(builder_, exp.paramValues);
+      auto fPtrTy = PointerType::get(fty, 0);
+      auto fnPtrInt = namedValues_[exp.funName];
+      auto fn = builder_.CreateIntToPtr(fnPtrInt, fPtrTy);
+      namedValues_[exp.name] = builder_.CreateCall(fty, fn, params, exp.name);
+    } else {
+      auto fn = module_.getFunction(exp.funName);
+      namedValues_[exp.name] = builder_.CreateCall(fn, params, exp.name);
+    }
     return LLVMLowerPipeline::operator()(exp);
   }
   void operator()(BopExp &exp) {
@@ -155,16 +176,16 @@ static void lowerBlock(LLVMLowerVisitor &visitor, Join &block) {
 
 // Context needs a global scope or else if it gets freed
 // it takes the module with it.
-static std::unique_ptr<LLVMContext> ctx;
-static std::unique_ptr<LoopAnalysisManager> lam;
-static std::unique_ptr<FunctionPassManager> fpm;
-static std::unique_ptr<FunctionAnalysisManager> fam;
-static std::unique_ptr<CGSCCAnalysisManager> cgam;
-static std::unique_ptr<ModuleAnalysisManager> mam;
-static std::unique_ptr<PassInstrumentationCallbacks> pic;
-static std::unique_ptr<StandardInstrumentations> si;
+std::unique_ptr<LLVMContext> ctx;
+std::unique_ptr<LoopAnalysisManager> lam;
+std::unique_ptr<FunctionPassManager> fpm;
+std::unique_ptr<FunctionAnalysisManager> fam;
+std::unique_ptr<CGSCCAnalysisManager> cgam;
+std::unique_ptr<ModuleAnalysisManager> mam;
+std::unique_ptr<PassInstrumentationCallbacks> pic;
+std::unique_ptr<StandardInstrumentations> si;
 
-std::unique_ptr<Module> lower(std::vector<Function> &&fns) {
+std::unique_ptr<Module> initializeModuleAndManagers() {
   ctx = std::make_unique<LLVMContext>();
   fpm = std::make_unique<FunctionPassManager>();
   lam = std::make_unique<LoopAnalysisManager>();
@@ -186,31 +207,32 @@ std::unique_ptr<Module> lower(std::vector<Function> &&fns) {
   PB.registerFunctionAnalyses(*fam);
   PB.crossRegisterProxies(*lam, *fam, *cgam, *mam);
 
-  auto module = std::make_unique<Module>("lambcalc program", *ctx);
+  return std::make_unique<Module>("lambcalc program", *ctx);
+}
+
+std::unique_ptr<Module> initializeModuleAndManagers(const DataLayout &layout) {
+  auto mod = initializeModuleAndManagers();
+  mod->setDataLayout(layout);
+  return mod;
+}
+
+void lowerModule(std::vector<Function> &&fns, Module &module) {
   auto builder = std::make_unique<IRBuilder<>>(*ctx);
   for (auto &fn : fns) {
     // getPtrTy() gets an opaque pointer, which is preferred for modern LLVM
     // than a typed pointer.
-    std::vector<Type *> tys;
-    for (size_t i = 0; i < fn.params.size(); ++i) {
-      if (i == 0) {
-        tys.push_back(builder->getPtrTy());
-      } else {
-        tys.push_back(builder->getInt64Ty());
-      }
-    }
-    auto ty = llvm::FunctionType::get(builder->getInt64Ty(), tys, false);
+    auto ty = getFunctionType(*builder, fn.params);
     llvm::Function::Create(ty, llvm::GlobalValue::ExternalLinkage, fn.name,
-                           *module);
+                           module);
   }
   for (auto &fn : fns) {
     StringMap<llvm::AllocaInst *> spillSlots;
     StringMap<llvm::Value *> namedValues;
     StringMap<llvm::BasicBlock *> namedBlocks;
-    LLVMLowerVisitor visitor(*ctx, *module, *builder, spillSlots, namedValues,
+    LLVMLowerVisitor visitor(*ctx, module, *builder, spillSlots, namedValues,
                              namedBlocks);
 
-    auto loweredFn = module->getFunction(fn.name);
+    auto loweredFn = module.getFunction(fn.name);
     auto loweredEntryBlock =
         BasicBlock::Create(*ctx, fn.entryBlock.name, loweredFn);
     namedBlocks[fn.entryBlock.name] = loweredEntryBlock;
@@ -243,8 +265,20 @@ std::unique_ptr<Module> lower(std::vector<Function> &&fns) {
     }
     llvm::verifyFunction(*loweredFn);
   }
+}
+
+std::unique_ptr<Module> lower(std::vector<Function> &&fns) {
+  auto module = initializeModuleAndManagers();
+  lowerModule(std::move(fns), *module);
   return module;
 }
 
-} // namespace anf
+std::unique_ptr<Module> lower(std::vector<Function> &&fns,
+                              const DataLayout &layout) {
+  auto module = initializeModuleAndManagers(layout);
+  lowerModule(std::move(fns), *module);
+  return module;
+}
+
+} // namespace lower
 } // namespace lambcalc

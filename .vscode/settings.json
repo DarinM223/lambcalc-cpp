@@ -73,6 +73,7 @@
     "unordered_set": "cpp",
     "format": "cpp",
     "span": "cpp",
-    "*.def": "cpp"
+    "*.def": "cpp",
+    "future": "cpp"
   }
 }

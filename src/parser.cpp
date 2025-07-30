@@ -62,9 +62,8 @@ std::unique_ptr<ast::Exp> Parser::parsePrimary() {
   case Token::Identifier:
     return ast::make(ast::VarExp{lexer_.getIdentifier()});
   default:
-    throw std::runtime_error(
-        "Invalid token: " +
-        std::to_string(static_cast<int>(getCurrentToken())));
+    throw ParserException("Invalid token: " +
+                          std::to_string(static_cast<int>(getCurrentToken())));
   }
 }
 

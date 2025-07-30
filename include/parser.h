@@ -7,6 +7,14 @@
 
 namespace lambcalc {
 
+class ParserException : public std::exception {
+  std::string reason_;
+
+public:
+  explicit ParserException(const std::string &reason) : reason_(reason) {}
+  virtual const char *what() const throw() { return reason_.c_str(); }
+};
+
 class Parser {
   Lexer &lexer_;
   Token currentToken_;
