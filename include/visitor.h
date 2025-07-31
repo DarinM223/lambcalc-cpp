@@ -130,11 +130,12 @@ template <typename Visitor> struct ExpValueVisitor : public Visitor {
   void operator()(VarValue &value) { visitValue(value); }
   void operator()(GlobValue &value) { visitValue(value); }
 
-  using Visitor::operator();
   decltype(auto) operator()(HaltExp &exp) {
     std::visit(*this, exp.value);
     return Visitor::operator()(exp);
   }
+  decltype(auto) operator()(FunExp &exp) { return Visitor::operator()(exp); }
+  decltype(auto) operator()(JoinExp &exp) { return Visitor::operator()(exp); }
   decltype(auto) operator()(JumpExp &exp) {
     if (exp.slotValue) {
       std::visit(*this, *exp.slotValue);
@@ -142,6 +143,8 @@ template <typename Visitor> struct ExpValueVisitor : public Visitor {
     return Visitor::operator()(exp);
   }
   decltype(auto) operator()(AppExp &exp) {
+    Value funValue(std::in_place_type<VarValue>, exp.funName);
+    std::visit(*this, funValue);
     for (auto &v : exp.paramValues) {
       std::visit(*this, v);
     }
@@ -160,6 +163,11 @@ template <typename Visitor> struct ExpValueVisitor : public Visitor {
     for (auto &v : exp.values) {
       std::visit(*this, v);
     }
+    return Visitor::operator()(exp);
+  }
+  decltype(auto) operator()(ProjExp &exp) {
+    Value tupleValue(std::in_place_type<VarValue>, exp.tuple);
+    std::visit(*this, tupleValue);
     return Visitor::operator()(exp);
   }
 };

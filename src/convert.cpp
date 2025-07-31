@@ -41,21 +41,19 @@ using ClosureConvertPipeline =
     WorklistVisitor<DefaultExpVisitor, WorklistTask, std::stack>;
 class ClosureConvertVisitor : public ClosureConvertPipeline {
   int counter_;
-  std::unique_ptr<Exp> *parentLink;
+  std::unique_ptr<Exp> *parentLink_;
   Var fresh(std::string_view prefix) {
     return prefix.data() + std::to_string(counter_++);
   }
 
 public:
   using ClosureConvertPipeline::operator();
-  ClosureConvertVisitor() : counter_(0), parentLink(nullptr) {}
-  void setParent(std::unique_ptr<Exp> *parentLink) {
-    this->parentLink = parentLink;
-  }
+  ClosureConvertVisitor() : counter_(0), parentLink_(nullptr) {}
+  void setParent(std::unique_ptr<Exp> *parentLink) { parentLink_ = parentLink; }
   void operator()(FunExp &exp) {
-    assert(parentLink != nullptr &&
+    assert(parentLink_ != nullptr &&
            "Expected FunExp to have a unique_ptr link");
-    auto freeVariables = freeVars(**parentLink);
+    auto freeVariables = freeVars(**parentLink_);
     auto closureParam = fresh("closure");
     exp.params.insert(exp.params.begin(), closureParam);
     auto body = std::move(exp.body);
@@ -74,16 +72,23 @@ public:
     ClosureConvertPipeline::operator()(exp);
   }
   void operator()(AppExp &exp) {
-    assert(parentLink != nullptr &&
+    assert(parentLink_ != nullptr &&
            "Expected AppExp to have a unique_ptr link");
     auto projName = fresh("proj");
     auto paramValues = std::move(exp.paramValues);
     paramValues.insert(paramValues.begin(), VarValue{exp.funName});
-    auto appData = AppExp{std::move(exp.name), projName, std::move(paramValues),
-                          std::move(exp.rest)};
-    addWorklist(&appData.rest, *appData.rest);
-    auto app = make(std::move(appData));
-    *parentLink = make(ProjExp{projName, exp.funName, 0, std::move(app)});
+
+    auto parentLink = parentLink_;
+    getWorklist().emplace(
+        std::in_place_index<1>,
+        [&exp, projName = std::move(projName),
+         paramValues = std::move(paramValues), parentLink]() {
+          auto appData = AppExp{std::move(exp.name), projName,
+                                std::move(paramValues), std::move(exp.rest)};
+          auto app = make(std::move(appData));
+          *parentLink = make(ProjExp{projName, exp.funName, 0, std::move(app)});
+        });
+    addWorklist(&exp.rest, *exp.rest);
   }
 };
 

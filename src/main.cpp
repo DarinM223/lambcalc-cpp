@@ -13,6 +13,8 @@ using namespace lambcalc;
 
 static llvm::ExitOnError ExitOnErr;
 
+constexpr bool LAMBCALC_DEBUG = false;
+
 const std::unordered_map<ast::Bop, std::optional<std::pair<int, int>>>
     defaultInfixBp{{ast::Bop::Plus, {{1, 2}}},
                    {ast::Bop::Minus, {{1, 2}}},
@@ -37,9 +39,38 @@ int main() {
     }
     auto anf = anf::convert(*exp);
     auto convert = convert::closureConvert(std::move(anf));
+    if constexpr (LAMBCALC_DEBUG) {
+      std::cout << *convert << std::endl;
+    }
+
     auto hoisted = anf::hoist(std::move(convert));
+    if constexpr (LAMBCALC_DEBUG) {
+      for (auto &fn : hoisted) {
+        std::cout << fn.name << "( ";
+        for (const auto &param : fn.params) {
+          std::cout << param << " ";
+        }
+        std::cout << "):" << std::endl;
+        std::cout << fn.entryBlock.name << " < ";
+        if (fn.entryBlock.slot) {
+          std::cout << *fn.entryBlock.slot;
+        }
+        std::cout << " >: " << std::endl << *fn.entryBlock.body << std::endl;
+        for (const auto &block : fn.blocks) {
+          std::cout << block.name << " < ";
+          if (block.slot) {
+            std::cout << *block.slot;
+          }
+          std::cout << " >: " << std::endl << *block.body << std::endl;
+        }
+
+        std::cout << std::endl;
+      }
+    }
     auto mod = lower::lower(std::move(hoisted), jit->getDataLayout());
-    mod->dump();
+    if constexpr (LAMBCALC_DEBUG) {
+      mod->dump();
+    }
 
     auto rt = jit->getMainJITDylib().createResourceTracker();
     auto tsm =

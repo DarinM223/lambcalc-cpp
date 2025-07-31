@@ -86,4 +86,38 @@ TEST(ClosureConvert, Simple) {
             "AppExp { i, proj1, [f, 3, a], HaltExp { i } } } } } } }");
 }
 
+TEST(ClosureConvert, Nested) {
+  // let f1 = fn a =>
+  //   let f2 = fn b =>
+  //     let r = a + b in
+  //     r
+  //   in
+  //   f2
+  // in
+  // let t1 = f1 1 in
+  // let t2 = t1 2 in
+  // t2
+  auto exp = make(FunExp{
+      "f1",
+      {"a"},
+      make(FunExp{"f2",
+                  {"b"},
+                  make(BopExp{"r", ast::Bop::Plus, VarValue{"a"}, VarValue{"b"},
+                              make(HaltExp{VarValue{"r"}})}),
+                  make(HaltExp{VarValue{"f2"}})}),
+      make(AppExp{
+          "t1",
+          "f1",
+          {IntValue{1}},
+          make(AppExp{
+              "t2", "t1", {IntValue{2}}, make(HaltExp{VarValue{"t2"}})})})});
+  auto convert = convert::closureConvert(std::move(exp));
+  EXPECT_EQ(convert->dump(),
+            "FunExp { f1, [closure0, a], FunExp { f2, [closure3, b], ProjExp { "
+            "a, closure3, 1, BopExp { r, +, a, b, HaltExp { r } } }, TupleExp "
+            "{ f2, [f2, a], HaltExp { f2 } } }, TupleExp { f1, [f1], ProjExp { "
+            "proj1, f1, 0, AppExp { t1, proj1, [f1, 1], ProjExp { proj2, t1, "
+            "0, AppExp { t2, proj2, [t1, 2], HaltExp { t2 } } } } } } }");
+}
+
 } // namespace lambcalc
