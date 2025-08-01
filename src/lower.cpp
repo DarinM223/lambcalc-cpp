@@ -49,10 +49,13 @@ public:
       : ctx_(ctx), module_(module), builder_(builder), value_(nullptr),
         spillSlots_(spillSlots), namedValues_(namedValues),
         namedBlocks_(namedBlocks) {}
-  using LLVMLowerPipeline::operator();
-  void visitValue(IntValue &value) { value_ = builder_.getInt64(value.value); }
-  void visitValue(VarValue &value) { value_ = namedValues_.lookup(value.var); }
-  void visitValue(GlobValue &value) {
+  void visitIntValue(IntValue &value) override {
+    value_ = builder_.getInt64(value.value);
+  }
+  void visitVarValue(VarValue &value) override {
+    value_ = namedValues_.lookup(value.var);
+  }
+  void visitGlobValue(GlobValue &value) override {
     llvm::Function *function;
     llvm::GlobalVariable *global;
     if ((function = module_.getFunction(value.glob))) {
@@ -65,14 +68,20 @@ public:
   }
 
   void operator()(HaltExp &exp) {
-    std::visit(*this, exp.value);
+    visitValue(exp.value);
     builder_.CreateRet(value_);
+  }
+  void operator()(FunExp &) {
+    assert(false && "FunExp should have been removed by hoisting");
+  }
+  void operator()(JoinExp &) {
+    assert(false && "JoinExp should have been removed by hoisting");
   }
   void operator()(JumpExp &exp) {
     auto block = namedBlocks_.lookup(exp.joinName);
     if (exp.slotValue) {
       auto slot = spillSlots_[exp.joinName];
-      std::visit(*this, *exp.slotValue);
+      visitValue(*exp.slotValue);
       builder_.CreateStore(value_, slot);
     }
     builder_.CreateBr(block);
@@ -80,7 +89,7 @@ public:
   void operator()(AppExp &exp) {
     std::vector<llvm::Value *> params;
     for (auto &val : exp.paramValues) {
-      std::visit(*this, val);
+      visitValue(val);
       params.push_back(value_);
     }
     if (namedValues_.contains(exp.funName)) {
@@ -96,9 +105,9 @@ public:
     return LLVMLowerPipeline::operator()(exp);
   }
   void operator()(BopExp &exp) {
-    std::visit(*this, exp.param1);
+    visitValue(exp.param1);
     auto param1 = value_;
-    std::visit(*this, exp.param2);
+    visitValue(exp.param2);
     auto param2 = value_;
     llvm::Instruction::BinaryOps bop;
     switch (exp.bop) {
@@ -130,7 +139,7 @@ public:
       // pointer. That address can be used for a store instruction.
       auto gep = builder_.CreateGEP(builder_.getInt64Ty(), ptr,
                                     {builder_.getInt64(i)});
-      std::visit(*this, value);
+      visitValue(value);
       builder_.CreateStore(value_, gep);
     }
     return LLVMLowerPipeline::operator()(exp);
@@ -144,9 +153,10 @@ public:
         builder_.CreateLoad(builder_.getInt64Ty(), gep, exp.name);
     return LLVMLowerPipeline::operator()(exp);
   }
+  void operator()(IfExp &exp) { return LLVMLowerPipeline::operator()(exp); }
 
   void visitIfJump(IfExp &exp, JumpExp &thenJump, JumpExp &elseJump) override {
-    std::visit(*this, exp.cond);
+    visitValue(exp.cond);
     auto cond = builder_.CreateICmpNE(value_, builder_.getInt64(0));
     if (thenJump.slotValue) {
       builder_.CreateStore(value_, spillSlots_[thenJump.joinName]);

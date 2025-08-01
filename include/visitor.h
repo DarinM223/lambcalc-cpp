@@ -76,7 +76,6 @@ public:
 
   using RetTy =
       decltype(std::declval<Visitor>().operator()(std::declval<HaltExp &>()));
-  using Visitor::operator();
 
 #define DISPATCH(GO)                                                           \
   if constexpr (std::is_same_v<RetTy, void>) {                                 \
@@ -121,53 +120,64 @@ public:
   }
 };
 
-template <typename Visitor> struct ExpValueVisitor : public Visitor {
-  template <class... Args> ExpValueVisitor(Args... args) : Visitor(args...) {}
-  virtual void visitValue(IntValue &value) {}
-  virtual void visitValue(VarValue &value) {}
-  virtual void visitValue(GlobValue &value) {}
-  void operator()(IntValue &value) { visitValue(value); }
-  void operator()(VarValue &value) { visitValue(value); }
-  void operator()(GlobValue &value) { visitValue(value); }
+template <typename Visitor> class ExpValueVisitor;
+
+template <typename Visitor> struct ValueVisitor {
+  ExpValueVisitor<Visitor> *parent_;
+  void operator()(IntValue &value) { parent_->visitIntValue(value); }
+  void operator()(VarValue &value) { parent_->visitVarValue(value); }
+  void operator()(GlobValue &value) { parent_->visitGlobValue(value); }
+};
+
+template <typename Visitor> class ExpValueVisitor : public Visitor {
+  ValueVisitor<Visitor> valueVisitor_;
+
+public:
+  template <class... Args>
+  ExpValueVisitor(Args... args) : Visitor(args...), valueVisitor_(this) {}
+  virtual void visitIntValue(IntValue &value) {}
+  virtual void visitVarValue(VarValue &value) {}
+  virtual void visitGlobValue(GlobValue &value) {}
+  void visitValue(Value &value) { std::visit(valueVisitor_, value); }
 
   decltype(auto) operator()(HaltExp &exp) {
-    std::visit(*this, exp.value);
+    visitValue(exp.value);
     return Visitor::operator()(exp);
   }
   decltype(auto) operator()(FunExp &exp) { return Visitor::operator()(exp); }
   decltype(auto) operator()(JoinExp &exp) { return Visitor::operator()(exp); }
   decltype(auto) operator()(JumpExp &exp) {
     if (exp.slotValue) {
-      std::visit(*this, *exp.slotValue);
+      visitValue(*exp.slotValue);
     }
     return Visitor::operator()(exp);
   }
   decltype(auto) operator()(AppExp &exp) {
     Value funValue(std::in_place_type<VarValue>, exp.funName);
-    std::visit(*this, funValue);
+    visitValue(funValue);
     for (auto &v : exp.paramValues) {
-      std::visit(*this, v);
+      visitValue(v);
     }
     return Visitor::operator()(exp);
   }
   decltype(auto) operator()(BopExp &exp) {
-    std::visit(*this, exp.param1);
-    std::visit(*this, exp.param2);
+    visitValue(exp.param1);
+    visitValue(exp.param2);
     return Visitor::operator()(exp);
   }
   decltype(auto) operator()(IfExp &exp) {
-    std::visit(*this, exp.cond);
+    visitValue(exp.cond);
     return Visitor::operator()(exp);
   }
   decltype(auto) operator()(TupleExp &exp) {
     for (auto &v : exp.values) {
-      std::visit(*this, v);
+      visitValue(v);
     }
     return Visitor::operator()(exp);
   }
   decltype(auto) operator()(ProjExp &exp) {
     Value tupleValue(std::in_place_type<VarValue>, exp.tuple);
-    std::visit(*this, tupleValue);
+    visitValue(tupleValue);
     return Visitor::operator()(exp);
   }
 };

@@ -33,8 +33,10 @@ public:
     addWorklist(parentLink, exp);
   }
 
-  void visitValue(VarValue &value) override { freeVars_.insert(value.var); }
-  void visitValue(GlobValue &value) override { freeVars_.insert(value.glob); }
+  void visitVarValue(VarValue &value) override { freeVars_.insert(value.var); }
+  void visitGlobValue(GlobValue &value) override {
+    freeVars_.insert(value.glob);
+  }
 };
 
 using ClosureConvertPipeline =
