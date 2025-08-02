@@ -30,8 +30,8 @@ llvm::FunctionType *getFunctionType(IRBuilder<> &builder,
 }
 
 using LLVMLowerPipeline =
-    MatchIfJump<WorklistVisitor<ExpValueVisitor<DefaultExpVisitor>,
-                                WorklistTask, std::stack>>;
+    MatchIfJump<WorklistVisitor<ExpValueVisitor<DefaultVisitor>,
+                                WorklistTask<Exp>, std::stack>>;
 class LLVMLowerVisitor : public LLVMLowerPipeline {
   LLVMContext &ctx_;
   Module &module_;
@@ -175,7 +175,7 @@ static void lowerBlock(LLVMLowerVisitor &visitor, Join &block) {
   while (!worklist.empty()) {
     auto task = std::move(worklist.top());
     worklist.pop();
-    std::visit(overloaded{[&](NodeTask &task) {
+    std::visit(overloaded{[&](NodeTask<Exp> &task) {
                             auto [parent, exp] = task;
                             std::visit(visitor, static_cast<Exp &>(exp));
                           },

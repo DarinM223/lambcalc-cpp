@@ -6,7 +6,7 @@ namespace lambcalc {
 namespace anf {
 
 using HoistPipeline =
-    WorklistVisitor<DefaultExpVisitor, WorklistTask, std::stack>;
+    WorklistVisitor<DefaultVisitor, WorklistTask<Exp>, std::stack>;
 class HoistVisitor : public HoistPipeline {
   int counter_;
   std::vector<Join> currentJoins_;
@@ -88,7 +88,7 @@ std::vector<Function> hoist(std::unique_ptr<anf::Exp> &&start) {
   while (!worklist.empty()) {
     auto task = std::move(worklist.top());
     worklist.pop();
-    std::visit(overloaded{[&](NodeTask &n) {
+    std::visit(overloaded{[&](NodeTask<Exp> &n) {
                             auto [parent, exp] = n;
                             visitor.setParentLink(parent);
                             std::visit(visitor, static_cast<Exp &>(exp));

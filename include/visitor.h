@@ -3,10 +3,44 @@
 
 #include "anf.h"
 #include <stack>
+#include <variant>
 
 namespace lambcalc {
 
+#define DISPATCH(GO)                                                           \
+  if constexpr (std::is_same_v<RetTy, void>) {                                 \
+    Visitor::operator()(exp);                                                  \
+    GO                                                                         \
+  } else {                                                                     \
+    auto result = Visitor::operator()(exp);                                    \
+    GO return result;                                                          \
+  }
+
+struct DefaultVisitor {
+  void operator()(auto &) {}
+};
+
+template <typename Exp>
+using NodeTask = std::pair<std::unique_ptr<Exp> *, std::reference_wrapper<Exp>>;
+using FnTask = std::move_only_function<void(void)>;
+
+template <typename Exp>
+struct WorklistTask : std::variant<NodeTask<Exp>, FnTask> {
+  using std::variant<NodeTask<Exp>, FnTask>::variant;
+  WorklistTask(std::unique_ptr<Exp> *parentLink,
+               std::reference_wrapper<Exp> exp)
+      : WorklistTask(std::in_place_index<0>, parentLink, exp) {}
+};
+
+template <typename T, typename Task>
+concept Worklist = requires(T worklist, Task task) { worklist.push(task); };
+
 namespace ast {
+
+template <typename T>
+concept Task = requires(T task, std::unique_ptr<Exp> *parentLink, Exp &exp) {
+  { T(parentLink, exp) } -> std::same_as<T>;
+};
 
 class PrintExpVisitor {
   std::ostream &out_;
@@ -21,20 +55,51 @@ public:
   void operator()(const IfExp &exp);
 };
 
+template <typename Visitor, Task T, template <class> class W>
+  requires Worklist<W<T>, T>
+class WorklistVisitor : public Visitor {
+  W<T> worklist;
+
+public:
+  template <class... Args> WorklistVisitor(Args... args) : Visitor(args...) {}
+  W<T> &getWorklist() { return worklist; }
+  virtual void addWorklist(std::unique_ptr<Exp> *parentLink, Exp &exp) {
+    worklist.push(T(parentLink, exp));
+  }
+  virtual void addWorklist(const std::string &name,
+                           std::unique_ptr<Exp> *parentLink, Exp &exp) {
+    addWorklist(parentLink, exp);
+  }
+
+  using RetTy =
+      decltype(std::declval<Visitor>().operator()(std::declval<IntExp &>()));
+
+  decltype(auto) operator()(IntExp &exp) { return Visitor::operator()(exp); }
+  decltype(auto) operator()(VarExp &exp) { return Visitor::operator()(exp); }
+  decltype(auto) operator()(LamExp &exp) {
+    DISPATCH(addWorklist(exp.param, &exp.body, *exp.body);)
+  }
+  decltype(auto) operator()(AppExp &exp) {
+    DISPATCH(addWorklist(&exp.fn, *exp.fn); addWorklist(&exp.arg, *exp.arg);)
+  }
+  decltype(auto) operator()(BopExp &exp) {
+    DISPATCH(addWorklist(&exp.arg1, *exp.arg1);
+             addWorklist(&exp.arg2, *exp.arg2);)
+  }
+  decltype(auto) operator()(IfExp &exp) {
+    DISPATCH(addWorklist(&exp.cond, *exp.cond);
+             addWorklist(&exp.then, *exp.then);
+             addWorklist(&exp.els, *exp.els);)
+  }
+};
+
 } // namespace ast
 
 namespace anf {
 
-template <typename T, typename Task>
-concept Worklist = requires(T worklist, Task task) { worklist.push(task); };
-
 template <typename T>
 concept Task = requires(T task, std::unique_ptr<Exp> *parentLink, Exp &exp) {
   { T(parentLink, exp) } -> std::same_as<T>;
-};
-
-struct DefaultExpVisitor {
-  void operator()(auto &) {}
 };
 
 template <typename Visitor> struct MatchIfJump : public Visitor {
@@ -76,15 +141,6 @@ public:
 
   using RetTy =
       decltype(std::declval<Visitor>().operator()(std::declval<HaltExp &>()));
-
-#define DISPATCH(GO)                                                           \
-  if constexpr (std::is_same_v<RetTy, void>) {                                 \
-    Visitor::operator()(exp);                                                  \
-    GO                                                                         \
-  } else {                                                                     \
-    auto result = Visitor::operator()(exp);                                    \
-    GO return result;                                                          \
-  }
 
   decltype(auto) operator()(HaltExp &exp) { return Visitor::operator()(exp); }
   decltype(auto) operator()(FunExp &exp) {
@@ -208,20 +264,10 @@ public:
   void operator()(const ProjExp &exp);
 };
 
-using NodeTask = std::pair<std::unique_ptr<Exp> *, std::reference_wrapper<Exp>>;
-using FnTask = std::move_only_function<void(void)>;
-
-struct WorklistTask : std::variant<NodeTask, FnTask> {
-  using variant::variant;
-  WorklistTask(std::unique_ptr<Exp> *parentLink,
-               std::reference_wrapper<Exp> exp)
-      : WorklistTask(std::in_place_index<0>, parentLink, exp) {}
-};
-
 // TODO: this visitor is unnecessary because PrintExpVisitor is already
 // recursive, but this is an example of a general use case for a worklist.
 struct PrintWorklistVisitor
-    : public WorklistVisitor<PrintExpVisitor, WorklistTask, std::stack> {
+    : public WorklistVisitor<PrintExpVisitor, WorklistTask<Exp>, std::stack> {
   PrintWorklistVisitor(std::reference_wrapper<std::ostream> out)
       : WorklistVisitor(out) {}
 };

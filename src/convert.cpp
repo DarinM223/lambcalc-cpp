@@ -7,8 +7,8 @@ namespace lambcalc {
 namespace convert {
 using namespace anf;
 
-using FreeVarsPipeline = WorklistVisitor<ExpValueVisitor<DefaultExpVisitor>,
-                                         WorklistTask, std::stack>;
+using FreeVarsPipeline = WorklistVisitor<ExpValueVisitor<DefaultVisitor>,
+                                         WorklistTask<Exp>, std::stack>;
 class FreeVarsVisitor : public FreeVarsPipeline {
   std::set<Var> &freeVars_;
 
@@ -40,7 +40,7 @@ public:
 };
 
 using ClosureConvertPipeline =
-    WorklistVisitor<DefaultExpVisitor, WorklistTask, std::stack>;
+    WorklistVisitor<DefaultVisitor, WorklistTask<Exp>, std::stack>;
 class ClosureConvertVisitor : public ClosureConvertPipeline {
   int counter_;
   std::unique_ptr<Exp> *parentLink_;
@@ -102,7 +102,7 @@ std::set<Var> freeVars(Exp &root) {
   while (!worklist.empty()) {
     auto task = std::move(worklist.top());
     worklist.pop();
-    std::visit(overloaded{[&](NodeTask &n) {
+    std::visit(overloaded{[&](NodeTask<Exp> &n) {
                             Exp &exp = std::get<1>(n);
                             std::visit(visitor, exp);
                           },
@@ -120,7 +120,7 @@ std::unique_ptr<Exp> closureConvert(std::unique_ptr<Exp> &&start) {
   while (!worklist.empty()) {
     auto task = std::move(worklist.top());
     worklist.pop();
-    std::visit(overloaded{[&](NodeTask &n) {
+    std::visit(overloaded{[&](NodeTask<Exp> &n) {
                             auto [parent, exp] = n;
                             visitor.setParent(parent);
                             std::visit(visitor, static_cast<Exp &>(exp));

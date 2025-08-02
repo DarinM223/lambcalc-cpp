@@ -64,6 +64,7 @@ file(
     src/lower.cpp
     src/lexer.cpp
     src/parser.cpp
+    src/rename.cpp
 )
 file(
     GLOB_RECURSE TEST_SOURCES
