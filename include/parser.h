@@ -9,9 +9,12 @@ namespace lambcalc {
 
 class ParserException : public std::exception {
   std::string reason_;
+  bool abort_;
 
 public:
-  explicit ParserException(const std::string &reason) : reason_(reason) {}
+  explicit ParserException(const std::string &reason, bool abort = false)
+      : reason_(reason), abort_(abort) {}
+  bool abort() noexcept { return abort_; }
   virtual const char *what() const throw() { return reason_.c_str(); }
 };
 

@@ -62,10 +62,13 @@ std::unique_ptr<ast::Exp> Parser::parsePrimary() {
   case Token::Identifier:
     return ast::make(ast::VarExp{lexer_.getIdentifier()});
   default:
-    throw ParserException("Invalid token: " +
-                          std::to_string(static_cast<int>(getCurrentToken())));
+    throw ParserException(
+        "Invalid token: " + std::to_string(static_cast<int>(getCurrentToken())),
+        getCurrentToken() == Token::Eof);
   }
 }
+
+constexpr int baseBP = 0;
 
 std::unique_ptr<ast::Exp> Parser::parseBinOp(int minBP) {
   nextToken();
@@ -99,11 +102,17 @@ std::unique_ptr<ast::Exp> Parser::parseBinOp(int minBP) {
       auto rhs = parseBinOp(appRbp);
       lhs = ast::make(ast::AppExp{std::move(lhs), std::move(rhs)});
     } else {
+      // Consume semicolons that delimit a REPL end.
+      if (minBP == baseBP && token == Token::Semicolon) {
+        nextToken();
+      }
       return lhs;
     }
   }
 }
 
-std::unique_ptr<ast::Exp> Parser::parseExpression() { return parseBinOp(0); }
+std::unique_ptr<ast::Exp> Parser::parseExpression() {
+  return parseBinOp(baseBP);
+}
 
 } // namespace lambcalc

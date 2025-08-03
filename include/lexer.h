@@ -19,6 +19,7 @@ enum class Token {
   Plus = '+',
   Minus = '-',
   Times = '*',
+  Semicolon = ';',
 };
 
 class Lexer {
