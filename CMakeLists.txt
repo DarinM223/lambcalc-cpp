@@ -75,6 +75,7 @@ file(
     test/lower.cpp
     test/lexer.cpp
     test/parser.cpp
+    test/rename.cpp
 )
 
 add_executable(lambcalc ${SOURCES})
