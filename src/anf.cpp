@@ -77,12 +77,10 @@ struct AnfConvertVisitor {
           .body = k(VarValue{slot}),
           .rest = make(IfExp{
               .cond = condValue,
-              .thenBranch = thenBranch.convert([&joinName =
-                                                    joinName](Value value) {
+              .thenBranch = thenBranch.convert([&joinName](Value value) {
                 return make(JumpExp{joinName, std::optional{std::move(value)}});
               }),
-              .elseBranch = elseBranch.convert([&joinName =
-                                                    joinName](Value value) {
+              .elseBranch = elseBranch.convert([&joinName](Value value) {
                 return make(JumpExp{joinName, std::optional{std::move(value)}});
               })})});
     });

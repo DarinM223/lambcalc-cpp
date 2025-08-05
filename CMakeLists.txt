@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.28)
 project(lambcalc-cpp)
 
-list(APPEND CMAKE_PREFIX_PATH "${LLMV_DIR}/lib/cmake/llvm/")
+list(APPEND CMAKE_PREFIX_PATH "${LLVM_DIR}/lib/cmake/llvm/")
 
 find_package(LLVM CONFIG)
 
