@@ -15,7 +15,8 @@ std::string binOpString(ast::Bop bop) {
   std::unreachable();
 }
 
-template <typename T> void print_vector(std::ostream &os, std::vector<T> vec) {
+template <typename T>
+void print_vector(std::ostream &os, const std::vector<T> &vec) {
   os << "[";
   for (auto it = vec.begin(); it != vec.end(); ++it) {
     os << *it;

@@ -57,7 +57,7 @@ void rename(ast::Exp &exp) {
                             Exp &exp = std::get<1>(n);
                             std::visit(visitor, exp);
                           },
-                          [](FnTask &f) { f(); }},
+                          [](FnTask &f) { std::move(f)(); }},
                task);
   }
 }

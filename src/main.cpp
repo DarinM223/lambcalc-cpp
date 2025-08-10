@@ -63,7 +63,7 @@ int main() {
 
     auto hoisted = anf::hoist(std::move(convert));
     if constexpr (LAMBCALC_DEBUG) {
-      for (auto &fn : hoisted) {
+      for (const auto &fn : hoisted) {
         std::cout << fn.name << "( ";
         for (const auto &param : fn.params) {
           std::cout << param << " ";

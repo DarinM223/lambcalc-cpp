@@ -6,4 +6,5 @@ lambcalc
 lambcalc-test
 googletest-prefix/
 build/
+compile_commands.json
 *.a

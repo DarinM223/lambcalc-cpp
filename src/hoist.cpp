@@ -19,7 +19,7 @@ class HoistVisitor : public HoistPipeline {
 
 public:
   using HoistPipeline::operator();
-  HoistVisitor() : counter_(0) {}
+  HoistVisitor() : counter_(0), parentLink_(nullptr) {}
   void setParentLink(std::unique_ptr<Exp> *parentLink) {
     parentLink_ = parentLink;
   }
@@ -88,12 +88,12 @@ std::vector<Function> hoist(std::unique_ptr<anf::Exp> &&start) {
   while (!worklist.empty()) {
     auto task = std::move(worklist.top());
     worklist.pop();
-    std::visit(overloaded{[&](NodeTask<Exp> &n) {
+    std::visit(overloaded{[&](const NodeTask<Exp> &n) {
                             auto [parent, exp] = n;
                             visitor.setParentLink(parent);
                             std::visit(visitor, static_cast<Exp &>(exp));
                           },
-                          [](FnTask &f) { f(); }},
+                          [](FnTask &f) { std::move(f)(); }},
                task);
   }
   return visitor.moveOutCollectedFunctions();

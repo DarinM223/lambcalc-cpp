@@ -175,11 +175,11 @@ static void lowerBlock(LLVMLowerVisitor &visitor, Join &block) {
   while (!worklist.empty()) {
     auto task = std::move(worklist.top());
     worklist.pop();
-    std::visit(overloaded{[&](NodeTask<Exp> &task) {
+    std::visit(overloaded{[&](const NodeTask<Exp> &task) {
                             auto [parent, exp] = task;
                             std::visit(visitor, static_cast<Exp &>(exp));
                           },
-                          [](FnTask &fn) { fn(); }},
+                          [](FnTask &fn) { std::move(fn)(); }},
                task);
   }
 }

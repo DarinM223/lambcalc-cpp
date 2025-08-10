@@ -29,7 +29,7 @@ class Lexer {
   int numberValue_;
 
 public:
-  Lexer(std::istream &in) : in_(in), lastChar_(' '), numberValue_(0) {}
+  explicit Lexer(std::istream &in) : in_(in), lastChar_(' '), numberValue_(0) {}
   Token getToken();
   const std::string &getIdentifier() const { return identifier_; }
   int getNumber() const { return numberValue_; }

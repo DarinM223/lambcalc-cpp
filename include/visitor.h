@@ -46,7 +46,8 @@ class PrintExpVisitor {
   std::ostream &out_;
 
 public:
-  PrintExpVisitor(std::reference_wrapper<std::ostream> out) : out_(out) {}
+  explicit PrintExpVisitor(std::reference_wrapper<std::ostream> out)
+      : out_(out) {}
   void operator()(const IntExp &exp);
   void operator()(const VarExp &exp);
   void operator()(const LamExp &exp);
@@ -242,7 +243,7 @@ class PrintValueVisitor {
   std::ostream &out_;
 
 public:
-  PrintValueVisitor(std::ostream &out) : out_(out) {}
+  explicit PrintValueVisitor(std::ostream &out) : out_(out) {}
   void operator()(const IntValue &value);
   void operator()(const VarValue &value);
   void operator()(const GlobValue &value);
@@ -252,7 +253,8 @@ class PrintExpVisitor {
   std::ostream &out_;
 
 public:
-  PrintExpVisitor(std::reference_wrapper<std::ostream> out) : out_(out) {}
+  explicit PrintExpVisitor(std::reference_wrapper<std::ostream> out)
+      : out_(out) {}
   void operator()(const HaltExp &exp);
   void operator()(const FunExp &exp);
   void operator()(const JoinExp &exp);
@@ -262,14 +264,6 @@ public:
   void operator()(const IfExp &exp);
   void operator()(const TupleExp &exp);
   void operator()(const ProjExp &exp);
-};
-
-// TODO: this visitor is unnecessary because PrintExpVisitor is already
-// recursive, but this is an example of a general use case for a worklist.
-struct PrintWorklistVisitor
-    : public WorklistVisitor<PrintExpVisitor, WorklistTask<Exp>, std::stack> {
-  PrintWorklistVisitor(std::reference_wrapper<std::ostream> out)
-      : WorklistVisitor(out) {}
 };
 
 } // namespace anf

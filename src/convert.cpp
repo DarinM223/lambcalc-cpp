@@ -13,7 +13,7 @@ class FreeVarsVisitor : public FreeVarsPipeline {
   std::set<Var> &freeVars_;
 
 public:
-  FreeVarsVisitor(std::set<Var> &freeVars) : freeVars_(freeVars) {}
+  explicit FreeVarsVisitor(std::set<Var> &freeVars) : freeVars_(freeVars) {}
   using FreeVarsPipeline::operator();
   using FreeVarsPipeline::addWorklist;
 
@@ -102,11 +102,11 @@ std::set<Var> freeVars(Exp &root) {
   while (!worklist.empty()) {
     auto task = std::move(worklist.top());
     worklist.pop();
-    std::visit(overloaded{[&](NodeTask<Exp> &n) {
+    std::visit(overloaded{[&](const NodeTask<Exp> &n) {
                             Exp &exp = std::get<1>(n);
                             std::visit(visitor, exp);
                           },
-                          [](FnTask &f) { f(); }},
+                          [](FnTask &f) { std::move(f)(); }},
                task);
   }
   return freeVars;
@@ -120,12 +120,12 @@ std::unique_ptr<Exp> closureConvert(std::unique_ptr<Exp> &&start) {
   while (!worklist.empty()) {
     auto task = std::move(worklist.top());
     worklist.pop();
-    std::visit(overloaded{[&](NodeTask<Exp> &n) {
+    std::visit(overloaded{[&](const NodeTask<Exp> &n) {
                             auto [parent, exp] = n;
                             visitor.setParent(parent);
                             std::visit(visitor, static_cast<Exp &>(exp));
                           },
-                          [](FnTask &f) { f(); }},
+                          [](FnTask &f) { std::move(f)(); }},
                task);
   }
   return root;

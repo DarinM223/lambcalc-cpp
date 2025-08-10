@@ -23,3 +23,10 @@ make
 LLVM 19 is required to be installed and accessible in the PATH, and the C++ compiler must support C++23.
 
 Once the files have finished compiling, to run the JIT REPL, run `./lambcalc`. To run the unit tests, run `./lambcalc-test`.
+
+To run cppcheck, run:
+
+```
+cmake -DCMAKE_EXPORT_COMPILE_COMMANDS=ON .
+cppcheck -igoogletest-prefix --suppress='*:googletest-prefix/*' --enable=all --suppress=missingInclude --suppress=missingIncludeSystem --suppress=useStlAlgorithm --project=compile_commands.json
+```
