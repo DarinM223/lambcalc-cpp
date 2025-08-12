@@ -72,7 +72,8 @@ TEST(Hoist, FunJoin) {
                            make(JumpExp{"j2", {IntValue{0}}})}),
               make(AppExp{
                   "y", "f2", {IntValue{1}}, make(HaltExp{VarValue{"y"}})})}),
-          make(JoinExp{"j3", {}, make(JumpExp{"j1"}), make(JumpExp{"j3"})})}),
+          make(JoinExp{
+              "j3", {}, make(JumpExp{"j1", {}}), make(JumpExp{"j3", {}})})}),
       make(AppExp{"x", "f1", {IntValue{0}}, make(HaltExp{VarValue{"x"}})})});
   auto collected = anf::hoist(std::move(exp));
   EXPECT_EQ(collected.size(), static_cast<size_t>(3));

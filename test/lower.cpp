@@ -41,7 +41,8 @@ TEST(Lower, Functions) {
                            make(JumpExp{"j2", {IntValue{0}}})}),
               make(AppExp{
                   "y", "f2", {IntValue{1}}, make(HaltExp{VarValue{"y"}})})}),
-          make(JoinExp{"j3", {}, make(JumpExp{"j1"}), make(JumpExp{"j3"})})}),
+          make(JoinExp{
+              "j3", {}, make(JumpExp{"j1", {}}), make(JumpExp{"j3", {}})})}),
       make(AppExp{"x", "f1", {IntValue{0}}, make(HaltExp{VarValue{"x"}})})});
   auto hoisted = anf::hoist(std::move(exp));
   auto lowered = lower::lower(std::move(hoisted));

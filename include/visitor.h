@@ -67,7 +67,7 @@ public:
   virtual void addWorklist(std::unique_ptr<Exp> *parentLink, Exp &exp) {
     worklist.push(T(parentLink, exp));
   }
-  virtual void addWorklist(const std::string &name,
+  virtual void addWorklist(const std::string &,
                            std::unique_ptr<Exp> *parentLink, Exp &exp) {
     addWorklist(parentLink, exp);
   }
@@ -131,11 +131,11 @@ public:
   virtual void addWorklist(std::unique_ptr<Exp> *parentLink, Exp &exp) {
     worklist.push(T(parentLink, exp));
   }
-  virtual void addWorklist(const Var &name, std::unique_ptr<Exp> *parentLink,
+  virtual void addWorklist(const Var &, std::unique_ptr<Exp> *parentLink,
                            Exp &exp) {
     addWorklist(parentLink, exp);
   }
-  virtual void addWorklist(const std::vector<Var> &names,
+  virtual void addWorklist(const std::vector<Var> &,
                            std::unique_ptr<Exp> *parentLink, Exp &exp) {
     addWorklist(parentLink, exp);
   }
@@ -192,9 +192,9 @@ template <typename Visitor> class ExpValueVisitor : public Visitor {
 public:
   template <class... Args>
   ExpValueVisitor(Args... args) : Visitor(args...), valueVisitor_(this) {}
-  virtual void visitIntValue(IntValue &value) {}
-  virtual void visitVarValue(VarValue &value) {}
-  virtual void visitGlobValue(GlobValue &value) {}
+  virtual void visitIntValue(IntValue &) {}
+  virtual void visitVarValue(VarValue &) {}
+  virtual void visitGlobValue(GlobValue &) {}
   void visitValue(Value &value) { std::visit(valueVisitor_, value); }
 
   decltype(auto) operator()(HaltExp &exp) {
