@@ -8,6 +8,7 @@ namespace anf {
 
 static int counter = 0;
 std::string fresh() { return std::string("tmp") + std::to_string(counter++); }
+void resetCounter() { counter = 0; }
 
 template <StringLiteral lit> struct StringValueVisitor {
   std::string operator()(VarValue v) { return v.var; }
@@ -305,20 +306,51 @@ std::unique_ptr<Exp> convertDefunc(ast::Exp &root) {
                 auto j = fresh();
                 auto p = fresh();
 
-                k2.emplace_back(std::in_place_type<K2_If1>, std::move(frame.t),
-                                std::move(frame.f), std::move(j), p,
-                                std::move(value));
+                k2.emplace_back(std::in_place_type<K2_If1>, frame.t, frame.f,
+                                std::move(j), p, std::move(value));
                 value = VarValue{p};
               },
               [&](K_If2 &frame) {
                 k2_exp = make(JumpExp{.joinName = std::move(frame.j),
                                       .slotValue = {std::move(value)}});
                 dispatch = APPLY_K2;
-              }},
+              },
+          },
           frame);
       break;
     }
     case GO:
+      std::visit(
+          overloaded{
+              [&](ast::IntExp &exp) {
+                value = IntValue{exp.value};
+                dispatch = APPLY_K;
+              },
+              [&](ast::VarExp &exp) {
+                value = VarValue{exp.name};
+                dispatch = APPLY_K;
+              },
+              [&](ast::LamExp &exp) {
+                go_exp = exp.body.get();
+                K oldK;
+                k.swap(oldK);
+                k2.emplace_back(std::in_place_type<K2_Lam1>, std::move(oldK),
+                                exp.param);
+              },
+              [&](ast::AppExp &exp) {
+                go_exp = exp.fn.get();
+                k.emplace_back(std::in_place_type<K_App1>, *exp.arg);
+              },
+              [&](ast::BopExp &exp) {
+                go_exp = exp.arg1.get();
+                k.emplace_back(std::in_place_type<K_Bop1>, *exp.arg2, exp.bop);
+              },
+              [&](ast::IfExp &exp) {
+                go_exp = exp.cond.get();
+                k.emplace_back(std::in_place_type<K_If1>, *exp.then, *exp.els);
+              },
+          },
+          *go_exp);
       break;
     }
   }

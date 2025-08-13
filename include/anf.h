@@ -99,8 +99,10 @@ struct Exp : public std::variant<HaltExp, FunExp, JoinExp, JumpExp, AppExp,
   std::string dump();
 };
 
+void resetCounter();
 std::unique_ptr<Exp> make(Exp &&exp);
 std::unique_ptr<Exp> convert(ast::Exp &exp);
+std::unique_ptr<Exp> convertDefunc(ast::Exp &root);
 
 } // namespace anf
 } // namespace lambcalc
