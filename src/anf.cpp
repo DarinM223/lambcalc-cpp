@@ -95,237 +95,233 @@ std::unique_ptr<Exp> convert(ast::Exp &exp) {
   return exp.convert([](Value value) { return make(HaltExp{value}); });
 }
 
-struct K;
-struct K2;
+struct KFrame;
+struct K2Frame;
 
-struct K2 {
-  enum { CONVERT = 0, LAM1, LAM2, APP1, BOP1, IF1, IF2, IF3, LENGTH } tag;
-  union {
-    struct {
-    } convert;
+using K = std::vector<KFrame>;
+using K2 = std::vector<K2Frame>;
 
-    struct {
-      K2 *k2;
-      K *k;
-      std::string v;
-    } lam1;
-
-    struct {
-      K2 *k2;
-      std::string f, v;
-      std::unique_ptr<Exp> body;
-    } lam2;
-
-    struct {
-      std::string r, f;
-      Value x;
-      K2 *k2;
-    } app1;
-
-    struct {
-      std::string r;
-      ast::Bop bop;
-      Value x, y;
-      K2 *k2;
-    } bop1;
-
-    struct {
-      ast::Exp &t;
-      ast::Exp &f;
-      K2 *k2;
-      std::string j, p;
-      Value c;
-    } if1;
-
-    struct {
-      ast::Exp &f;
-      K2 *k2;
-      std::string j, p;
-      Value c;
-      std::unique_ptr<Exp> rest;
-    } if2;
-
-    struct {
-      std::unique_ptr<Exp> t;
-      K2 *k2;
-      std::string j, p;
-      Value c;
-      std::unique_ptr<Exp> rest;
-    } if3;
-  };
-
-  void destroy();
-
-  ~K2() { destroy(); }
+struct K2_Lam1 {
+  K k;
+  std::string v;
 };
 
-struct K {
-  enum { LAM1 = K2::LENGTH, APP1, APP2, BOP1, BOP2, IF1, IF2 } tag;
-  union {
-    struct {
-    } lam1;
-
-    struct {
-      ast::Exp &x;
-      K *k;
-    } app1;
-
-    struct {
-      Value f;
-      K *k;
-    } app2;
-
-    struct {
-      ast::Exp &y;
-      ast::Bop bop;
-      K *k;
-    } bop1;
-
-    struct {
-      Value x;
-      ast::Bop bop;
-      K *k;
-    } bop2;
-
-    struct {
-      ast::Exp &t;
-      ast::Exp &f;
-      K *k;
-    } if1;
-
-    struct {
-      std::string j;
-    } if2;
-  };
-
-  void destroy();
-
-  ~K() { destroy(); }
+struct K2_Lam2 {
+  std::string f, v;
+  std::unique_ptr<Exp> body;
 };
 
-void K2::destroy() {
-  switch (tag) {
-  case LAM1:
-    lam1.v.~basic_string();
-    delete lam1.k2;
-    delete lam1.k;
-    break;
-  case LAM2:
-    lam2.f.~basic_string();
-    lam2.v.~basic_string();
-    delete lam2.k2;
-    lam2.body.~unique_ptr();
-    break;
-  case APP1:
-    app1.r.~basic_string();
-    app1.f.~basic_string();
-    delete app1.k2;
-    break;
-  case BOP1:
-    bop1.r.~basic_string();
-    delete bop1.k2;
-    break;
-  case IF1:
-    delete if1.k2;
-    if1.j.~basic_string();
-    if1.p.~basic_string();
-    break;
-  case IF2:
-    delete if2.k2;
-    if2.rest.~unique_ptr();
-    if2.j.~basic_string();
-    if2.p.~basic_string();
-    break;
-  case IF3:
-    if3.t.~unique_ptr();
-    delete if3.k2;
-    if3.j.~basic_string();
-    if3.p.~basic_string();
-    if3.rest.~unique_ptr();
-    break;
-  default:
-    break;
-  }
-}
+struct K2_App1 {
+  std::string r, f;
+  Value x;
+};
 
-void K::destroy() {
-  switch (tag) {
-  case LAM1:
-    break;
-  case APP1:
-    delete app1.k;
-    break;
-  case APP2:
-    delete app2.k;
-    break;
-  case BOP1:
-    delete bop1.k;
-    break;
-  case BOP2:
-    delete bop2.k;
-    break;
-  case IF1:
-    delete if1.k;
-    break;
-  case IF2:
-    if2.j.~basic_string();
-    break;
-  }
-}
+struct K2_Bop1 {
+  std::string r;
+  ast::Bop bop;
+  Value x, y;
+};
+
+struct K2_If1 {
+  ast::Exp &t;
+  ast::Exp &f;
+  std::string j, p;
+  Value c;
+};
+
+struct K2_If2 {
+  ast::Exp &f;
+  std::string j, p;
+  Value c;
+  std::unique_ptr<Exp> rest;
+};
+
+struct K2_If3 {
+  std::unique_ptr<Exp> t;
+  std::string j, p;
+  Value c;
+  std::unique_ptr<Exp> rest;
+};
+
+struct K2Frame : public std::variant<K2_Lam1, K2_Lam2, K2_App1, K2_Bop1, K2_If1,
+                                     K2_If2, K2_If3> {
+  using variant::variant;
+};
+
+struct K_App1 {
+  ast::Exp &x;
+};
+
+struct K_App2 {
+  Value f;
+};
+
+struct K_Bop1 {
+  ast::Exp &y;
+  ast::Bop bop;
+};
+
+struct K_Bop2 {
+  Value x;
+  ast::Bop bop;
+};
+
+struct K_If1 {
+  ast::Exp &t;
+  ast::Exp &f;
+};
+
+struct K_If2 {
+  std::string j;
+};
+
+struct KFrame
+    : public std::variant<K_App1, K_App2, K_Bop1, K_Bop2, K_If1, K_If2> {
+  using variant::variant;
+};
 
 std::unique_ptr<Exp> convertDefunc(ast::Exp &root) {
-  // go's parameters
+  // Parameters for apply_k2, apply_k, and go normalized.
+  // If two parameters for different functions have the same type,
+  // they can share the same variable because tail calls destroy the stack.
   ast::Exp *go_exp = &root;
-  K2 *go_k2 = new K2{.tag = K2::CONVERT, .convert = {}};
-  K *go_k = new K{.tag = K::LAM1, .lam1 = {}};
-
-  // applyK2's parameters
   std::unique_ptr<Exp> k2_exp;
+  K k;
+  K2 k2;
+  Value value;
 
-  // applyK's parameters
-  Value k_value;
-  K2 *k_k2 = nullptr;
+  enum { APPLY_K2, APPLY_K, GO } dispatch = GO;
 
-  static const void *dispatch_table[] = {
-      &&APPLY_K2_CONVERT, &&APPLY_K2_LAM1, &&APPLY_K2_LAM2, &&APPLY_K2_APP1,
-      &&APPLY_K2_BOP1,    &&APPLY_K2_IF1,  &&APPLY_K2_IF2,  &&APPLY_K2_IF3,
-      &&APPLY_K_LAM1,     &&APPLY_K_APP1,  &&APPLY_K_APP2,  &&APPLY_K_BOP1,
-      &&APPLY_K_BOP2,     &&APPLY_K_IF1,   &&APPLY_K_IF2};
+  while (true) {
+    switch (dispatch) {
+    case APPLY_K2: {
+      if (k2.empty()) {
+        return k2_exp;
+      }
+      auto frame = std::move(k2.back());
+      k2.pop_back();
+      std::visit(
+          overloaded{
+              [&](K2_Lam1 &frame) {
+                auto f = fresh();
+                k = std::move(frame.k);
+                value = VarValue{f};
+                k2.emplace_back(std::in_place_type<K2_Lam2>, f, frame.v,
+                                std::move(k2_exp));
+                dispatch = APPLY_K;
+              },
+              [&](K2_Lam2 &frame) {
+                k2_exp = make(FunExp{.name = std::move(frame.f),
+                                     .params = {std::move(frame.v)},
+                                     .body = std::move(frame.body),
+                                     .rest = std::move(k2_exp)});
+              },
+              [&](K2_App1 &frame) {
+                k2_exp = make(AppExp{.name = std::move(frame.r),
+                                     .funName = std::move(frame.f),
+                                     .paramValues = {std::move(frame.x)},
+                                     .rest = std::move(k2_exp)});
+              },
+              [&](K2_Bop1 &frame) {
+                k2_exp = make(BopExp{.name = std::move(frame.r),
+                                     .bop = frame.bop,
+                                     .param1 = std::move(frame.x),
+                                     .param2 = std::move(frame.y),
+                                     .rest = std::move(k2_exp)});
+              },
+              [&](K2_If1 &frame) {
+                go_exp = &frame.t;
+                k2.emplace_back(std::in_place_type<K2_If2>, frame.f, frame.j,
+                                std::move(frame.p), std::move(frame.c),
+                                std::move(k2_exp));
+                k.clear();
+                k.emplace_back(std::in_place_type<K_If2>, frame.j);
+                dispatch = GO;
+              },
+              [&](K2_If2 &frame) {
+                go_exp = &frame.f;
+                k2.emplace_back(std::in_place_type<K2_If3>, std::move(k2_exp),
+                                frame.j, std::move(frame.p), std::move(frame.c),
+                                std::move(frame.rest));
+                k.clear();
+                k.emplace_back(std::in_place_type<K_If2>, frame.j);
+                dispatch = GO;
+              },
+              [&](K2_If3 &frame) {
+                k2_exp = make(JoinExp{
+                    .name = std::move(frame.j),
+                    .slot = {std::move(frame.p)},
+                    .body = std::move(frame.rest),
+                    .rest = make(IfExp{.cond = std::move(frame.c),
+                                       .thenBranch = std::move(frame.t),
+                                       .elseBranch = std::move(k2_exp)})});
+              },
+          },
+          frame);
+      break;
+    }
+    case APPLY_K: {
+      if (k.empty()) {
+        k2_exp = make(HaltExp{value});
+        dispatch = APPLY_K2;
+        continue;
+      }
+      auto frame = std::move(k.back());
+      k.pop_back();
+      std::visit(
+          overloaded{
+              [&](K_App1 &frame) {
+                go_exp = &frame.x;
+                k.emplace_back(std::in_place_type<K_App2>, std::move(value));
+                dispatch = GO;
+              },
+              [&](K_App2 &frame) {
+                std::visit(overloaded{[&](VarValue &f) {
+                                        auto r = fresh();
+                                        k2.emplace_back(
+                                            std::in_place_type<K2_App1>, r,
+                                            f.var, std::move(value));
+                                        value = VarValue{r};
+                                      },
+                                      [](auto &) {
+                                        throw std::runtime_error(
+                                            "must apply named value");
+                                      }},
+                           frame.f);
+              },
+              [&](K_Bop1 &frame) {
+                go_exp = &frame.y;
+                k.emplace_back(std::in_place_type<K_Bop2>, std::move(value),
+                               frame.bop);
+                dispatch = GO;
+              },
+              [&](K_Bop2 &frame) {
+                auto r = fresh();
+                k2.emplace_back(std::in_place_type<K2_Bop1>, r, frame.bop,
+                                std::move(frame.x), std::move(value));
+                value = VarValue{r};
+              },
+              [&](K_If1 &frame) {
+                auto j = fresh();
+                auto p = fresh();
 
-#define DISPATCH(tag) goto *dispatch_table[(tag)]
-
-APPLY_K2_CONVERT:
-  return k2_exp;
-
-APPLY_K2_LAM1:
-  auto f = fresh();
-
-APPLY_K2_LAM2:
-
-APPLY_K2_APP1:
-
-APPLY_K2_BOP1:
-
-APPLY_K2_IF1:
-
-APPLY_K2_IF2:
-
-APPLY_K2_IF3:
-
-APPLY_K_LAM1:
-
-APPLY_K_APP1:
-
-APPLY_K_APP2:
-
-APPLY_K_BOP1:
-
-APPLY_K_BOP2:
-
-APPLY_K_IF1:
-
-APPLY_K_IF2:
-
+                k2.emplace_back(std::in_place_type<K2_If1>, std::move(frame.t),
+                                std::move(frame.f), std::move(j), p,
+                                std::move(value));
+                value = VarValue{p};
+              },
+              [&](K_If2 &frame) {
+                k2_exp = make(JumpExp{.joinName = std::move(frame.j),
+                                      .slotValue = {std::move(value)}});
+                dispatch = APPLY_K2;
+              }},
+          frame);
+      break;
+    }
+    case GO:
+      break;
+    }
+  }
   return nullptr;
 }
 
