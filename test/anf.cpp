@@ -11,8 +11,9 @@ TEST(AnfConversion, BinaryOperators) {
       Bop::Plus, make(BopExp{Bop::Times, make(IntExp{2}), make(IntExp{3})}),
       make(IntExp{4})});
   auto anf = anf::convert(*expr);
-  EXPECT_EQ(anf->dump(), "BopExp { tmp0, *, 2, 3, BopExp { tmp1, +, tmp0, 4, "
-                         "HaltExp { tmp1 } } }");
+  std::string expected = "BopExp { tmp0, *, 2, 3, BopExp { tmp1, +, tmp0, 4, "
+                         "HaltExp { tmp1 } } }";
+  EXPECT_EQ(anf->dump(), expected);
 }
 
 TEST(AnfConversion, LamApp) {
@@ -21,9 +22,10 @@ TEST(AnfConversion, LamApp) {
                                                make(IntExp{1})})}),
                   make(IntExp{1})});
   auto anf = anf::convert(*expr);
-  EXPECT_EQ(anf->dump(),
-            "FunExp { tmp2, [x], BopExp { tmp3, +, x, 1, HaltExp { tmp3 } }, "
-            "AppExp { tmp4, tmp2, [1], HaltExp { tmp4 } } }");
+  std::string expected =
+      "FunExp { tmp3, [x], BopExp { tmp2, +, x, 1, HaltExp { tmp2 } }, AppExp "
+      "{ tmp4, tmp3, [1], HaltExp { tmp4 } } }";
+  EXPECT_EQ(anf->dump(), expected);
 }
 
 TEST(AnfConversion, IfElse) {
@@ -36,34 +38,39 @@ TEST(AnfConversion, IfElse) {
           make(LamExp{"x", make(BopExp{Bop::Plus, make(VarExp{"x"}),
                                        make(IntExp{1})})})}),
       make(IntExp{0})});
+  anf::resetCounter();
   auto anf = anf::convert(*expr);
-  // let tmp5 = 0 + 1 in
-  // let join tmp6 <tmp7> =
-  //   let join tmp8 <tmp9> = tmp9 in
-  //   if tmp7 then
-  //     let tmp10 = fn f =>
-  //       let tmp11 = f 1 in
-  //       tmp11
+  // let tmp0 = 0 + 1 in
+  // let join tmp1 <tmp2> =
+  //   let join tmp3 <tmp4> = tmp4 in
+  //   if tmp2 then
+  //     let tmp6 = fn f =>
+  //       let tmp5 = f 1 in
+  //       tmp5
   //     in
-  //     let tmp12 = fn x =>
-  //       let tmp13 = x + 1 in
-  //       tmp13
+  //     let tmp8 = fn x =>
+  //       let tmp7 = x + 1 in
+  //       tmp7
   //     in
-  //     let tmp14 = tmp10 tmp12 in
-  //     jump tmp8 tmp14
+  //     let tmp9 = tmp6 tmp8 in
+  //     jump tmp3 tmp9
   //   else
-  //     jump tmp8 0
+  //     jump tmp3 0
   // in
-  // if tmp5 then jump tmp6 0
-  // else jump tmp6 1
-  EXPECT_EQ(
-      anf->dump(),
-      "BopExp { tmp5, +, 0, 1, JoinExp { tmp6, <tmp7>, JoinExp { tmp8, <tmp9>, "
-      "HaltExp { tmp9 }, IfExp { tmp7, FunExp { tmp10, [f], AppExp { tmp11, f, "
-      "[1], HaltExp { tmp11 } }, FunExp { tmp12, [x], BopExp { tmp13, +, x, 1, "
-      "HaltExp { tmp13 } }, AppExp { tmp14, tmp10, [tmp12], JumpExp { tmp8, "
-      "<tmp14> } } } }, JumpExp { tmp8, <0> } } }, IfExp { tmp5, JumpExp { "
-      "tmp6, <0> }, JumpExp { tmp6, <1> } } } }");
+  // if tmp0 then jump tmp1 0
+  // else jump tmp1 1
+  std::string expected =
+      "BopExp { tmp0, +, 0, 1, JoinExp { tmp1, <tmp2>, JoinExp { tmp3, <tmp4>, "
+      "HaltExp { tmp4 }, IfExp { tmp2, FunExp { tmp6, [f], AppExp { tmp5, f, "
+      "[1], HaltExp { tmp5 } }, FunExp { tmp8, [x], BopExp { tmp7, +, x, 1, "
+      "HaltExp { tmp7 } }, AppExp { tmp9, tmp6, [tmp8], JumpExp { tmp3, <tmp9> "
+      "} } } }, JumpExp { tmp3, <0> } } }, IfExp { tmp0, JumpExp { tmp1, <0> "
+      "}, JumpExp { tmp1, <1> } } } }";
+  EXPECT_EQ(anf->dump(), expected);
+
+  anf::resetCounter();
+  auto anfDefunc = anf::convertDefunc(*expr);
+  EXPECT_EQ(anf->dump(), anfDefunc->dump());
 }
 
 } // namespace lambcalc

@@ -28,11 +28,12 @@ struct AnfConvertVisitor {
     return k(VarValue{exp.name});
   }
   std::unique_ptr<Exp> operator()(ast::LamExp &exp) {
+    auto body = convert(*exp.body);
     auto name = fresh();
     return make(FunExp{
         .name = name,
         .params = {exp.param},
-        .body = convert(*exp.body),
+        .body = std::move(body),
         .rest = k(VarValue{name}),
     });
   }
