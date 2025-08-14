@@ -57,6 +57,7 @@ include_directories(include/)
 file(
     GLOB_RECURSE SOURCES
     src/main.cpp
+    src/ast.cpp
     src/anf.cpp
     src/visitor.cpp
     src/convert.cpp

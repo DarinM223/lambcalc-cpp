@@ -171,7 +171,7 @@ public:
 
 static void lowerBlock(LLVMLowerVisitor &visitor, Join &block) {
   auto &worklist = visitor.getWorklist();
-  worklist.emplace(&block.body, *block.body);
+  worklist.emplace(&block.body);
   while (!worklist.empty()) {
     auto task = std::move(worklist.top());
     worklist.pop();

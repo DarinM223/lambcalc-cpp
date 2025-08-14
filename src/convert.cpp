@@ -17,20 +17,19 @@ public:
   using FreeVarsPipeline::operator();
   using FreeVarsPipeline::addWorklist;
 
-  void addWorklist(const Var &name, std::unique_ptr<Exp> *parentLink,
-                   Exp &exp) override {
+  void addWorklist(const Var &name, std::unique_ptr<Exp> *parentLink) override {
     getWorklist().emplace(std::in_place_index<1>,
                           [&]() { freeVars_.erase(name); });
-    addWorklist(parentLink, exp);
+    addWorklist(parentLink);
   }
   void addWorklist(const std::vector<Var> &names,
-                   std::unique_ptr<Exp> *parentLink, Exp &exp) override {
+                   std::unique_ptr<Exp> *parentLink) override {
     getWorklist().emplace(std::in_place_index<1>, [&]() {
       for (auto &v : names) {
         freeVars_.erase(v);
       }
     });
-    addWorklist(parentLink, exp);
+    addWorklist(parentLink);
   }
 
   void visitVarValue(VarValue &value) override { freeVars_.insert(value.var); }
@@ -90,7 +89,7 @@ public:
           auto app = make(std::move(appData));
           *parentLink = make(ProjExp{projName, exp.funName, 0, std::move(app)});
         });
-    addWorklist(&exp.rest, *exp.rest);
+    addWorklist(&exp.rest);
   }
 };
 
@@ -98,7 +97,7 @@ std::set<Var> freeVars(Exp &root) {
   std::set<Var> freeVars;
   FreeVarsVisitor visitor(freeVars);
   auto &worklist = visitor.getWorklist();
-  worklist.emplace(nullptr, root);
+  std::visit(visitor, root);
   while (!worklist.empty()) {
     auto task = std::move(worklist.top());
     worklist.pop();
@@ -116,7 +115,7 @@ std::unique_ptr<Exp> closureConvert(std::unique_ptr<Exp> &&start) {
   ClosureConvertVisitor visitor;
   auto &worklist = visitor.getWorklist();
   auto root = std::move(start);
-  worklist.emplace(&root, *root);
+  worklist.emplace(&root);
   while (!worklist.empty()) {
     auto task = std::move(worklist.top());
     worklist.pop();

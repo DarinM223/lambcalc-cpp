@@ -73,4 +73,14 @@ TEST(AnfConversion, IfElse) {
   EXPECT_EQ(anf->dump(), anfDefunc->dump());
 }
 
+TEST(AnfConversion, StackOverflow) {
+  auto exp = make(IntExp{1});
+  for (size_t i = 0; i < 10000; ++i) {
+    exp = make(BopExp{Bop::Plus, make(IntExp{1}), std::move(exp)});
+  }
+  //   auto anf = anf::convertDefunc(*exp);
+  //   std::string expected = "";
+  //   EXPECT_EQ(anf->dump(), expected);
+}
+
 } // namespace lambcalc
