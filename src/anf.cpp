@@ -1,6 +1,8 @@
 #include "anf.h"
 #include "utils.h"
+#include "visitor.h"
 #include <exception>
+#include <queue>
 #include <sstream>
 
 namespace lambcalc {
@@ -95,6 +97,23 @@ std::unique_ptr<Exp> make(Exp &&exp) {
 
 std::unique_ptr<Exp> convert(ast::Exp &exp) {
   return exp.convert([](Value value) { return make(HaltExp{value}); });
+}
+
+struct DestructorVisitor
+    : WorklistVisitor<DefaultVisitor, DestructorTask<Exp>, std::queue> {};
+
+Exp::~Exp() {
+  DestructorVisitor visitor;
+  auto &queue = visitor.getWorklist();
+  std::visit(visitor, *this);
+  while (!queue.empty()) {
+    auto task = std::move(queue.front());
+    queue.pop();
+
+    if (task.exp != nullptr) {
+      std::visit(visitor, *task.exp);
+    }
+  }
 }
 
 struct KFrame;
