@@ -27,13 +27,13 @@ using FnTask = std::move_only_function<void(void)>;
 template <typename Exp>
 struct WorklistTask : std::variant<NodeTask<Exp>, FnTask> {
   using std::variant<NodeTask<Exp>, FnTask>::variant;
-  WorklistTask(std::unique_ptr<Exp> *parentLink)
+  explicit WorklistTask(std::unique_ptr<Exp> *parentLink)
       : WorklistTask(std::in_place_index<0>, parentLink, **parentLink) {}
 };
 
 template <typename Exp> struct DestructorTask {
   std::unique_ptr<Exp> exp;
-  DestructorTask(std::unique_ptr<Exp> *parentLink)
+  explicit DestructorTask(std::unique_ptr<Exp> *parentLink)
       : exp(parentLink == nullptr ? nullptr : std::move(*parentLink)) {}
 };
 
