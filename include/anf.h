@@ -97,10 +97,15 @@ struct Exp : public std::variant<HaltExp, FunExp, JoinExp, JumpExp, AppExp,
   using variant::variant;
   friend std::ostream &operator<<(std::ostream &os, const Exp &exp);
   std::string dump();
+  // Need to redefine the move constructor after defining the destructor :(
+  Exp(Exp &&) = default;
+  ~Exp();
 };
 
+void resetCounter();
 std::unique_ptr<Exp> make(Exp &&exp);
 std::unique_ptr<Exp> convert(ast::Exp &exp);
+std::unique_ptr<Exp> convertDefunc(ast::Exp &root);
 
 } // namespace anf
 } // namespace lambcalc

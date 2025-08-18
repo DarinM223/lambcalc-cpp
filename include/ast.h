@@ -59,6 +59,9 @@ struct Exp
 
   std::unique_ptr<anf::Exp>
   convert(std::function<std::unique_ptr<anf::Exp>(anf::Value)> k);
+  // Need to redefine the move constructor after defining the destructor :(
+  Exp(Exp &&) = default;
+  ~Exp();
 };
 
 std::unique_ptr<Exp> make(Exp &&exp);

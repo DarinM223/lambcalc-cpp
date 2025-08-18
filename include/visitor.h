@@ -27,9 +27,14 @@ using FnTask = std::move_only_function<void(void)>;
 template <typename Exp>
 struct WorklistTask : std::variant<NodeTask<Exp>, FnTask> {
   using std::variant<NodeTask<Exp>, FnTask>::variant;
-  WorklistTask(std::unique_ptr<Exp> *parentLink,
-               std::reference_wrapper<Exp> exp)
-      : WorklistTask(std::in_place_index<0>, parentLink, exp) {}
+  explicit WorklistTask(std::unique_ptr<Exp> *parentLink)
+      : WorklistTask(std::in_place_index<0>, parentLink, **parentLink) {}
+};
+
+template <typename Exp> struct DestructorTask {
+  std::unique_ptr<Exp> exp;
+  explicit DestructorTask(std::unique_ptr<Exp> *parentLink)
+      : exp(parentLink == nullptr ? nullptr : std::move(*parentLink)) {}
 };
 
 template <typename T, typename Task>
@@ -38,8 +43,8 @@ concept Worklist = requires(T worklist, Task task) { worklist.push(task); };
 namespace ast {
 
 template <typename T>
-concept Task = requires(T task, std::unique_ptr<Exp> *parentLink, Exp &exp) {
-  { T(parentLink, exp) } -> std::same_as<T>;
+concept Task = requires(T task, std::unique_ptr<Exp> *parentLink) {
+  { T(parentLink) } -> std::same_as<T>;
 };
 
 class PrintExpVisitor {
@@ -64,12 +69,12 @@ class WorklistVisitor : public Visitor {
 public:
   template <class... Args> WorklistVisitor(Args... args) : Visitor(args...) {}
   W<T> &getWorklist() { return worklist; }
-  virtual void addWorklist(std::unique_ptr<Exp> *parentLink, Exp &exp) {
-    worklist.push(T(parentLink, exp));
+  virtual void addWorklist(std::unique_ptr<Exp> *parentLink) {
+    worklist.push(T(parentLink));
   }
   virtual void addWorklist(const std::string &,
-                           std::unique_ptr<Exp> *parentLink, Exp &exp) {
-    addWorklist(parentLink, exp);
+                           std::unique_ptr<Exp> *parentLink) {
+    addWorklist(parentLink);
   }
 
   using RetTy =
@@ -78,19 +83,17 @@ public:
   decltype(auto) operator()(IntExp &exp) { return Visitor::operator()(exp); }
   decltype(auto) operator()(VarExp &exp) { return Visitor::operator()(exp); }
   decltype(auto) operator()(LamExp &exp) {
-    DISPATCH(addWorklist(exp.param, &exp.body, *exp.body);)
+    DISPATCH(addWorklist(exp.param, &exp.body);)
   }
   decltype(auto) operator()(AppExp &exp) {
-    DISPATCH(addWorklist(&exp.fn, *exp.fn); addWorklist(&exp.arg, *exp.arg);)
+    DISPATCH(addWorklist(&exp.fn); addWorklist(&exp.arg);)
   }
   decltype(auto) operator()(BopExp &exp) {
-    DISPATCH(addWorklist(&exp.arg1, *exp.arg1);
-             addWorklist(&exp.arg2, *exp.arg2);)
+    DISPATCH(addWorklist(&exp.arg1); addWorklist(&exp.arg2);)
   }
   decltype(auto) operator()(IfExp &exp) {
-    DISPATCH(addWorklist(&exp.cond, *exp.cond);
-             addWorklist(&exp.then, *exp.then);
-             addWorklist(&exp.els, *exp.els);)
+    DISPATCH(addWorklist(&exp.cond); addWorklist(&exp.then);
+             addWorklist(&exp.els);)
   }
 };
 
@@ -99,8 +102,8 @@ public:
 namespace anf {
 
 template <typename T>
-concept Task = requires(T task, std::unique_ptr<Exp> *parentLink, Exp &exp) {
-  { T(parentLink, exp) } -> std::same_as<T>;
+concept Task = requires(T task, std::unique_ptr<Exp> *parentLink) {
+  { T(parentLink) } -> std::same_as<T>;
 };
 
 template <typename Visitor> struct MatchIfJump : public Visitor {
@@ -128,16 +131,15 @@ class WorklistVisitor : public Visitor {
 public:
   template <class... Args> WorklistVisitor(Args... args) : Visitor(args...) {}
   W<T> &getWorklist() { return worklist; }
-  virtual void addWorklist(std::unique_ptr<Exp> *parentLink, Exp &exp) {
-    worklist.push(T(parentLink, exp));
+  virtual void addWorklist(std::unique_ptr<Exp> *parentLink) {
+    worklist.push(T(parentLink));
   }
-  virtual void addWorklist(const Var &, std::unique_ptr<Exp> *parentLink,
-                           Exp &exp) {
-    addWorklist(parentLink, exp);
+  virtual void addWorklist(const Var &, std::unique_ptr<Exp> *parentLink) {
+    addWorklist(parentLink);
   }
   virtual void addWorklist(const std::vector<Var> &,
-                           std::unique_ptr<Exp> *parentLink, Exp &exp) {
-    addWorklist(parentLink, exp);
+                           std::unique_ptr<Exp> *parentLink) {
+    addWorklist(parentLink);
   }
 
   using RetTy =
@@ -145,35 +147,34 @@ public:
 
   decltype(auto) operator()(HaltExp &exp) { return Visitor::operator()(exp); }
   decltype(auto) operator()(FunExp &exp) {
-    DISPATCH(addWorklist(exp.params, &exp.body, *exp.body);
-             addWorklist(exp.name, &exp.rest, *exp.rest);)
+    DISPATCH(addWorklist(exp.params, &exp.body);
+             addWorklist(exp.name, &exp.rest);)
   }
   decltype(auto) operator()(JoinExp &exp) {
     DISPATCH({
       if (exp.slot) {
-        addWorklist(*exp.slot, &exp.body, *exp.body);
+        addWorklist(*exp.slot, &exp.body);
       } else {
-        addWorklist(&exp.body, *exp.body);
+        addWorklist(&exp.body);
       }
-      addWorklist(exp.name, &exp.rest, *exp.rest);
+      addWorklist(exp.name, &exp.rest);
     })
   }
   decltype(auto) operator()(JumpExp &exp) { return Visitor::operator()(exp); }
   decltype(auto) operator()(AppExp &exp) {
-    DISPATCH(addWorklist(exp.name, &exp.rest, *exp.rest);)
+    DISPATCH(addWorklist(exp.name, &exp.rest);)
   }
   decltype(auto) operator()(BopExp &exp) {
-    DISPATCH(addWorklist(exp.name, &exp.rest, *exp.rest);)
+    DISPATCH(addWorklist(exp.name, &exp.rest);)
   }
   decltype(auto) operator()(IfExp &exp) {
-    DISPATCH(addWorklist(&exp.thenBranch, *exp.thenBranch);
-             addWorklist(&exp.elseBranch, *exp.elseBranch);)
+    DISPATCH(addWorklist(&exp.thenBranch); addWorklist(&exp.elseBranch);)
   }
   decltype(auto) operator()(TupleExp &exp) {
-    DISPATCH(addWorklist(exp.name, &exp.rest, *exp.rest);)
+    DISPATCH(addWorklist(exp.name, &exp.rest);)
   }
   decltype(auto) operator()(ProjExp &exp) {
-    DISPATCH(addWorklist(exp.name, &exp.rest, *exp.rest);)
+    DISPATCH(addWorklist(exp.name, &exp.rest);)
   }
 };
 

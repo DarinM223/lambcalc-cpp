@@ -49,7 +49,7 @@ public:
 void rename(ast::Exp &exp) {
   AlphaRenameVisitor visitor;
   auto &worklist = visitor.getWorklist();
-  worklist.emplace(nullptr, exp);
+  std::visit(visitor, exp);
   while (!worklist.empty()) {
     auto task = std::move(worklist.top());
     worklist.pop();

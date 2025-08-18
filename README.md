@@ -9,6 +9,12 @@ It is similar to these projects in [Smalltalk](https://github.com/DarinM223/lamb
 * It uses LLVM's JIT support to provide a JIT compiled REPL instead of compiling files to object code.
 * It uses a manual recursive descent parser with Pratt parsing for parsing operators instead of a parser combinator library.
 * It uses worklists with a heap-allocated stack for most passes for stack safety.
+* Stack safe ANF conversion implemented by first writing down the recursive ANF
+  conversion algorithm in Standard ML, then CPS converting it and
+  defunctionalizing the result. The defunctionalized state machine is then
+  translated into C++ as a loop that mutates outside variables which serve as
+  parameters for a tail call. The defunctionalization process is written out
+  step by step in the [Standard ML file](./src/anf-defunctionalization.sml).
 
 Building
 --------
@@ -28,5 +34,5 @@ To run cppcheck, run:
 
 ```
 cmake -DCMAKE_EXPORT_COMPILE_COMMANDS=ON .
-cppcheck -igoogletest-prefix --suppress='*:googletest-prefix/*' --enable=all --suppress=missingInclude --suppress=missingIncludeSystem --suppress=useStlAlgorithm --project=compile_commands.json
+cppcheck -igoogletest-prefix --suppress='*:googletest-prefix/*' --enable=all --suppress=missingInclude --suppress=missingIncludeSystem --suppress=useStlAlgorithm --suppress=duplInheritedMember --project=compile_commands.json
 ```

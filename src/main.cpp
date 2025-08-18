@@ -55,7 +55,7 @@ int main() {
     if constexpr (LAMBCALC_DEBUG) {
       std::cout << "After renaming: " << *exp << std::endl;
     }
-    auto anf = anf::convert(*exp);
+    auto anf = anf::convertDefunc(*exp);
     auto convert = convert::closureConvert(std::move(anf));
     if constexpr (LAMBCALC_DEBUG) {
       std::cout << *convert << std::endl;
