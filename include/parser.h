@@ -45,11 +45,9 @@ public:
       currentToken_ = lexer_.getToken();
     }
   }
+  std::optional<Token> getPeekToken() { return peekToken_; }
   Token peekToken() {
-    if (peekToken_) {
-      return *peekToken_;
-    }
-    return *(peekToken_ = lexer_.getToken());
+    return peekToken_ ? *peekToken_ : *(peekToken_ = lexer_.getToken());
   }
   std::unique_ptr<ast::Exp> parseExpression();
 };

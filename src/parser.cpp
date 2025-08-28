@@ -102,10 +102,6 @@ std::unique_ptr<ast::Exp> Parser::parseBinOp(int minBP) {
       auto rhs = parseBinOp(appRbp);
       lhs = ast::make(ast::AppExp{std::move(lhs), std::move(rhs)});
     } else {
-      // Consume semicolons that delimit a REPL end.
-      if (minBP == baseBP && token == Token::Semicolon) {
-        nextToken();
-      }
       return lhs;
     }
   }

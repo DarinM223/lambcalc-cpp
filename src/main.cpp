@@ -31,9 +31,19 @@ int main() {
   Lexer lexer(std::cin);
   Parser parser(lexer, defaultInfixBp);
   while (true) {
+    // If a peek token is already buffered, consume it.
+    if (parser.getPeekToken() && *parser.getPeekToken() == Token::Semicolon) {
+      parser.nextToken();
+      continue;
+    }
     std::cout << "> ";
     std::unique_ptr<ast::Exp> exp;
     try {
+      // If it reads a semicolon token at the start, go back to
+      // beginning to consume it.
+      if (parser.peekToken() == Token::Semicolon) {
+        continue;
+      }
       exp = parser.parseExpression();
     } catch (ParserException &e) {
       std::cerr << e.what() << std::endl;
