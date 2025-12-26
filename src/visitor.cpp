@@ -1,5 +1,6 @@
 #include "visitor.h"
 #include <utility>
+#include <variant>
 
 namespace lambcalc {
 
@@ -38,7 +39,8 @@ void print_optional(std::ostream &os, std::optional<T> opt) {
 
 namespace ast {
 
-std::ostream &operator<<(std::ostream &os, const Exp &exp) {
+template <template <class> class Ptr>
+std::ostream &operator<<(std::ostream &os, const Exp<Ptr> &exp) {
   std::visit(PrintExpVisitor(os), exp);
   return os;
 }

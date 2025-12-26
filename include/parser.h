@@ -24,11 +24,11 @@ class Parser {
   std::optional<Token> peekToken_;
   std::unordered_map<ast::Bop, std::optional<std::pair<int, int>>> infixBp_;
 
-  std::unique_ptr<ast::Exp> parseFn();
-  std::unique_ptr<ast::Exp> parseIf();
-  std::unique_ptr<ast::Exp> parseParens();
-  std::unique_ptr<ast::Exp> parsePrimary();
-  std::unique_ptr<ast::Exp> parseBinOp(int minBP);
+  std::unique_ptr<ast::Exp<>> parseFn();
+  std::unique_ptr<ast::Exp<>> parseIf();
+  std::unique_ptr<ast::Exp<>> parseParens();
+  std::unique_ptr<ast::Exp<>> parsePrimary();
+  std::unique_ptr<ast::Exp<>> parseBinOp(int minBP);
 
 public:
   Parser(
@@ -49,7 +49,7 @@ public:
   Token peekToken() {
     return peekToken_ ? *peekToken_ : *(peekToken_ = lexer_.getToken());
   }
-  std::unique_ptr<ast::Exp> parseExpression();
+  std::unique_ptr<ast::Exp<>> parseExpression();
 };
 
 } // namespace lambcalc

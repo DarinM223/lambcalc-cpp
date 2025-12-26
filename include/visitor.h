@@ -43,11 +43,11 @@ concept Worklist = requires(T worklist, Task task) { worklist.push(task); };
 namespace ast {
 
 template <typename T>
-concept Task = requires(T task, std::unique_ptr<Exp> *parentLink) {
+concept Task = requires(T task, std::unique_ptr<Exp<>> *parentLink) {
   { T(parentLink) } -> std::same_as<T>;
 };
 
-class PrintExpVisitor {
+template <template <class> class Ptr> class PrintExpVisitor {
   std::ostream &out_;
 
 public:
@@ -55,10 +55,10 @@ public:
       : out_(out) {}
   void operator()(const IntExp &exp);
   void operator()(const VarExp &exp);
-  void operator()(const LamExp &exp);
-  void operator()(const AppExp &exp);
-  void operator()(const BopExp &exp);
-  void operator()(const IfExp &exp);
+  void operator()(const LamExp<Ptr> &exp);
+  void operator()(const AppExp<Ptr> &exp);
+  void operator()(const BopExp<Ptr> &exp);
+  void operator()(const IfExp<Ptr> &exp);
 };
 
 template <typename Visitor, Task T, template <class> class W>
@@ -69,11 +69,11 @@ class WorklistVisitor : public Visitor {
 public:
   template <class... Args> WorklistVisitor(Args... args) : Visitor(args...) {}
   W<T> &getWorklist() { return worklist; }
-  virtual void addWorklist(std::unique_ptr<Exp> *parentLink) {
+  virtual void addWorklist(std::unique_ptr<Exp<>> *parentLink) {
     worklist.push(T(parentLink));
   }
   virtual void addWorklist(const std::string &,
-                           std::unique_ptr<Exp> *parentLink) {
+                           std::unique_ptr<Exp<>> *parentLink) {
     addWorklist(parentLink);
   }
 
@@ -82,16 +82,16 @@ public:
 
   decltype(auto) operator()(IntExp &exp) { return Visitor::operator()(exp); }
   decltype(auto) operator()(VarExp &exp) { return Visitor::operator()(exp); }
-  decltype(auto) operator()(LamExp &exp) {
+  decltype(auto) operator()(LamExp<std::unique_ptr> &exp) {
     DISPATCH(addWorklist(exp.param, &exp.body);)
   }
-  decltype(auto) operator()(AppExp &exp) {
+  decltype(auto) operator()(AppExp<std::unique_ptr> &exp) {
     DISPATCH(addWorklist(&exp.fn); addWorklist(&exp.arg);)
   }
-  decltype(auto) operator()(BopExp &exp) {
+  decltype(auto) operator()(BopExp<std::unique_ptr> &exp) {
     DISPATCH(addWorklist(&exp.arg1); addWorklist(&exp.arg2);)
   }
-  decltype(auto) operator()(IfExp &exp) {
+  decltype(auto) operator()(IfExp<std::unique_ptr> &exp) {
     DISPATCH(addWorklist(&exp.cond); addWorklist(&exp.then);
              addWorklist(&exp.els);)
   }

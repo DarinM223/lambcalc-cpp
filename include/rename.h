@@ -17,7 +17,7 @@ public:
   virtual const char *what() const throw() { return reason_.c_str(); }
 };
 
-void rename(ast::Exp &exp);
+void rename(ast::Exp<> &exp);
 
 } // namespace ast
 } // namespace lambcalc

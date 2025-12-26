@@ -7,7 +7,6 @@
 #include "parser.h"
 #include "rename.h"
 #include "llvm/Support/TargetSelect.h"
-#include "llvm/Target/TargetMachine.h"
 #include <iostream>
 
 using namespace lambcalc;
@@ -37,7 +36,7 @@ int main() {
       continue;
     }
     std::cout << "> ";
-    std::unique_ptr<ast::Exp> exp;
+    std::unique_ptr<ast::Exp<>> exp;
     try {
       // If it reads a semicolon token at the start, go back to
       // beginning to consume it.

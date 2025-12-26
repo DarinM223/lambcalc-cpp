@@ -1,7 +1,6 @@
 #include "anf.h"
 #include "utils.h"
 #include "visitor.h"
-#include <exception>
 #include <queue>
 #include <sstream>
 
@@ -29,7 +28,7 @@ struct AnfConvertVisitor {
   std::unique_ptr<Exp> operator()(ast::VarExp &exp) {
     return k(VarValue{exp.name});
   }
-  std::unique_ptr<Exp> operator()(ast::LamExp &exp) {
+  std::unique_ptr<Exp> operator()(ast::LamExp<std::unique_ptr> &exp) {
     auto body = convert(*exp.body);
     auto name = fresh();
     return make(FunExp{
@@ -39,40 +38,42 @@ struct AnfConvertVisitor {
         .rest = k(VarValue{name}),
     });
   }
-  std::unique_ptr<Exp> operator()(ast::AppExp &exp) {
-    return exp.fn->convert([&arg = *exp.arg, &k = k](Value fnValue) {
+  std::unique_ptr<Exp> operator()(ast::AppExp<std::unique_ptr> &exp) {
+    return ast::convert(*exp.fn, [&arg = *exp.arg, &k = k](Value fnValue) {
       std::string fnName =
           std::visit(StringValueVisitor<"function">{}, std::move(fnValue));
-      return arg.convert([fnName = std::move(fnName), &k = k](Value argValue) {
-        auto name = fresh();
-        return make(AppExp{
-            .name = name,
-            .funName = fnName,
-            .paramValues = {argValue},
-            .rest = k(VarValue{name}),
-        });
-      });
+      return ast::convert(arg,
+                          [fnName = std::move(fnName), &k = k](Value argValue) {
+                            auto name = fresh();
+                            return make(AppExp{
+                                .name = name,
+                                .funName = fnName,
+                                .paramValues = {argValue},
+                                .rest = k(VarValue{name}),
+                            });
+                          });
     });
   }
-  std::unique_ptr<Exp> operator()(ast::BopExp &exp) {
-    return exp.arg1->convert(
-        [bop = exp.bop, &arg2 = *exp.arg2, &k = k](Value arg1Value) {
-          return arg2.convert(
-              [bop, arg1Value = std::move(arg1Value), &k = k](Value arg2Value) {
-                auto name = fresh();
-                return make(BopExp{
-                    .name = name,
-                    .bop = bop,
-                    .param1 = arg1Value,
-                    .param2 = arg2Value,
-                    .rest = k(VarValue{name}),
-                });
-              });
+  std::unique_ptr<Exp> operator()(ast::BopExp<std::unique_ptr> &exp) {
+    return ast::convert(
+        *exp.arg1, [bop = exp.bop, &arg2 = *exp.arg2, &k = k](Value arg1Value) {
+          return ast::convert(arg2, [bop, arg1Value = std::move(arg1Value),
+                                     &k = k](Value arg2Value) {
+            auto name = fresh();
+            return make(BopExp{
+                .name = name,
+                .bop = bop,
+                .param1 = arg1Value,
+                .param2 = arg2Value,
+                .rest = k(VarValue{name}),
+            });
+          });
         });
   }
-  std::unique_ptr<Exp> operator()(ast::IfExp &exp) {
-    return exp.cond->convert([&thenBranch = *exp.then, &elseBranch = *exp.els,
-                              &k = k](Value condValue) {
+  std::unique_ptr<Exp> operator()(ast::IfExp<std::unique_ptr> &exp) {
+    return ast::convert(*exp.cond, [&thenBranch = *exp.then,
+                                    &elseBranch = *exp.els,
+                                    &k = k](Value condValue) {
       auto joinName = fresh();
       auto slot = fresh();
       return make(JoinExp{
@@ -81,10 +82,13 @@ struct AnfConvertVisitor {
           .body = k(VarValue{slot}),
           .rest = make(IfExp{
               .cond = condValue,
-              .thenBranch = thenBranch.convert([&joinName](Value value) {
-                return make(JumpExp{joinName, std::optional{std::move(value)}});
-              }),
-              .elseBranch = elseBranch.convert([&joinName](Value value) {
+              .thenBranch = ast::convert(
+                  thenBranch,
+                  [&joinName](Value value) {
+                    return make(
+                        JumpExp{joinName, std::optional{std::move(value)}});
+                  }),
+              .elseBranch = ast::convert(elseBranch, [&joinName](Value value) {
                 return make(JumpExp{joinName, std::optional{std::move(value)}});
               })})});
     });
@@ -95,8 +99,8 @@ std::unique_ptr<Exp> make(Exp &&exp) {
   return std::make_unique<Exp>(std::move(exp));
 }
 
-std::unique_ptr<Exp> convert(ast::Exp &exp) {
-  return exp.convert([](Value value) { return make(HaltExp{value}); });
+std::unique_ptr<Exp> convert(ast::Exp<> &exp) {
+  return ast::convert(exp, [](Value value) { return make(HaltExp{value}); });
 }
 
 struct DestructorVisitor
@@ -144,14 +148,14 @@ struct K2_Bop1 {
 };
 
 struct K2_If1 {
-  ast::Exp &t;
-  ast::Exp &f;
+  ast::Exp<> &t;
+  ast::Exp<> &f;
   std::string j, p;
   Value c;
 };
 
 struct K2_If2 {
-  ast::Exp &f;
+  ast::Exp<> &f;
   std::string j, p;
   Value c;
   std::unique_ptr<Exp> rest;
@@ -170,7 +174,7 @@ struct K2Frame : public std::variant<K2_Lam1, K2_Lam2, K2_App1, K2_Bop1, K2_If1,
 };
 
 struct K_App1 {
-  ast::Exp &x;
+  ast::Exp<> &x;
 };
 
 struct K_App2 {
@@ -178,7 +182,7 @@ struct K_App2 {
 };
 
 struct K_Bop1 {
-  ast::Exp &y;
+  ast::Exp<> &y;
   ast::Bop bop;
 };
 
@@ -188,8 +192,8 @@ struct K_Bop2 {
 };
 
 struct K_If1 {
-  ast::Exp &t;
-  ast::Exp &f;
+  ast::Exp<> &t;
+  ast::Exp<> &f;
 };
 
 struct K_If2 {
@@ -201,11 +205,11 @@ struct KFrame
   using variant::variant;
 };
 
-std::unique_ptr<Exp> convertDefunc(ast::Exp &root) {
+std::unique_ptr<Exp> convertDefunc(ast::Exp<> &root) {
   // Parameters for apply_k2, apply_k, and go normalized.
   // If two parameters for different functions have the same type,
   // they can share the same variable because tail calls destroy the stack.
-  ast::Exp *go_exp = &root;
+  ast::Exp<> *go_exp = &root;
   std::unique_ptr<Exp> k2_exp;
   K k;
   K2 k2;
@@ -350,22 +354,22 @@ std::unique_ptr<Exp> convertDefunc(ast::Exp &root) {
                 value = VarValue{exp.name};
                 dispatch = APPLY_K;
               },
-              [&](ast::LamExp &exp) {
+              [&](ast::LamExp<std::unique_ptr> &exp) {
                 go_exp = exp.body.get();
                 K oldK;
                 k.swap(oldK);
                 k2.emplace_back(std::in_place_type<K2_Lam1>, std::move(oldK),
                                 exp.param);
               },
-              [&](ast::AppExp &exp) {
+              [&](ast::AppExp<std::unique_ptr> &exp) {
                 go_exp = exp.fn.get();
                 k.emplace_back(std::in_place_type<K_App1>, *exp.arg);
               },
-              [&](ast::BopExp &exp) {
+              [&](ast::BopExp<std::unique_ptr> &exp) {
                 go_exp = exp.arg1.get();
                 k.emplace_back(std::in_place_type<K_Bop1>, *exp.arg2, exp.bop);
               },
-              [&](ast::IfExp &exp) {
+              [&](ast::IfExp<std::unique_ptr> &exp) {
                 go_exp = exp.cond.get();
                 k.emplace_back(std::in_place_type<K_If1>, *exp.then, *exp.els);
               },
@@ -387,8 +391,8 @@ std::string Exp::dump() {
 
 namespace ast {
 
-std::unique_ptr<anf::Exp> Exp::convert(anf::Cont k) {
-  return std::visit(anf::AnfConvertVisitor{.k = std::move(k)}, *this);
+std::unique_ptr<anf::Exp> convert(Exp<> &exp, anf::Cont k) {
+  return std::visit(anf::AnfConvertVisitor{.k = std::move(k)}, exp);
 }
 
 } // namespace ast

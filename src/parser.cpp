@@ -16,7 +16,7 @@ static std::optional<ast::Bop> parseOp(const Token &token) {
   }
 }
 
-std::unique_ptr<ast::Exp> Parser::parseFn() {
+std::unique_ptr<ast::Exp<>> Parser::parseFn() {
   nextToken();
   assert(getCurrentToken() == Token::Identifier &&
          "Expected variable parameter");
@@ -28,7 +28,7 @@ std::unique_ptr<ast::Exp> Parser::parseFn() {
   return ast::make(ast::LamExp{std::move(param), std::move(body)});
 }
 
-std::unique_ptr<ast::Exp> Parser::parseIf() {
+std::unique_ptr<ast::Exp<>> Parser::parseIf() {
   auto cond = parseExpression();
   nextToken();
   assert(getCurrentToken() == Token::Then &&
@@ -42,14 +42,14 @@ std::unique_ptr<ast::Exp> Parser::parseIf() {
       ast::IfExp{std::move(cond), std::move(then), std::move(els)});
 }
 
-std::unique_ptr<ast::Exp> Parser::parseParens() {
+std::unique_ptr<ast::Exp<>> Parser::parseParens() {
   auto exp = parseExpression();
   nextToken();
   assert(getCurrentToken() == Token::RParen && "Expected right parenthesis");
   return exp;
 }
 
-std::unique_ptr<ast::Exp> Parser::parsePrimary() {
+std::unique_ptr<ast::Exp<>> Parser::parsePrimary() {
   switch (getCurrentToken()) {
   case Token::LParen:
     return parseParens();
@@ -70,9 +70,9 @@ std::unique_ptr<ast::Exp> Parser::parsePrimary() {
 
 constexpr int baseBP = 0;
 
-std::unique_ptr<ast::Exp> Parser::parseBinOp(int minBP) {
+std::unique_ptr<ast::Exp<>> Parser::parseBinOp(int minBP) {
   nextToken();
-  std::unique_ptr<ast::Exp> lhs = parsePrimary();
+  std::unique_ptr<ast::Exp<>> lhs = parsePrimary();
 
   int appLbp = 100, appRbp = 101;
   while (true) {
@@ -107,7 +107,7 @@ std::unique_ptr<ast::Exp> Parser::parseBinOp(int minBP) {
   }
 }
 
-std::unique_ptr<ast::Exp> Parser::parseExpression() {
+std::unique_ptr<ast::Exp<>> Parser::parseExpression() {
   return parseBinOp(baseBP);
 }
 

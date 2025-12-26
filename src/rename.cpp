@@ -1,12 +1,13 @@
 #include "rename.h"
 #include "utils.h"
 #include "visitor.h"
+#include <memory>
 
 namespace lambcalc {
 namespace ast {
 
 using AlphaRenamePipeline =
-    WorklistVisitor<DefaultVisitor, WorklistTask<Exp>, std::stack>;
+    WorklistVisitor<DefaultVisitor, WorklistTask<Exp<>>, std::stack>;
 class AlphaRenameVisitor : public AlphaRenamePipeline {
   int counter_;
   std::unordered_map<std::string, std::string> rename_;
@@ -18,7 +19,7 @@ class AlphaRenameVisitor : public AlphaRenamePipeline {
 public:
   AlphaRenameVisitor() : counter_(0) {}
   using AlphaRenamePipeline::operator();
-  void operator()(LamExp &exp) {
+  void operator()(LamExp<std::unique_ptr> &exp) {
     auto renamed = fresh(exp.param);
     std::optional<std::string> oldRenameParam =
         rename_.contains(exp.param) ? std::optional{rename_[exp.param]}
@@ -46,15 +47,15 @@ public:
   }
 };
 
-void rename(ast::Exp &exp) {
+void rename(ast::Exp<> &exp) {
   AlphaRenameVisitor visitor;
   auto &worklist = visitor.getWorklist();
   std::visit(visitor, exp);
   while (!worklist.empty()) {
     auto task = std::move(worklist.top());
     worklist.pop();
-    std::visit(overloaded{[&](NodeTask<Exp> &n) {
-                            Exp &exp = std::get<1>(n);
+    std::visit(overloaded{[&](NodeTask<Exp<>> &n) {
+                            Exp<> &exp = std::get<1>(n);
                             std::visit(visitor, exp);
                           },
                           [](FnTask &f) { std::move(f)(); }},
