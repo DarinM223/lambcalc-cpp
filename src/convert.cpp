@@ -2,6 +2,7 @@
 #include "utils.h"
 #include "visitor.h"
 #include <cassert>
+#include <stack>
 
 namespace lambcalc {
 namespace convert {

@@ -41,26 +41,38 @@ namespace ast {
 
 template <template <class> class Ptr>
 std::ostream &operator<<(std::ostream &os, const Exp<Ptr> &exp) {
-  std::visit(PrintExpVisitor(os), exp);
+  std::visit(PrintExpVisitor<Ptr>(os), exp);
   return os;
 }
 
-void PrintExpVisitor::operator()(const IntExp &exp) { out_ << exp.value; }
-void PrintExpVisitor::operator()(const VarExp &exp) { out_ << exp.name; }
-void PrintExpVisitor::operator()(const LamExp &exp) {
+template <template <class> class Ptr>
+void PrintExpVisitor<Ptr>::operator()(const IntExp &exp) {
+  out_ << exp.value;
+}
+template <template <class> class Ptr>
+void PrintExpVisitor<Ptr>::operator()(const VarExp &exp) {
+  out_ << exp.name;
+}
+template <template <class> class Ptr>
+void PrintExpVisitor<Ptr>::operator()(const LamExp<Ptr> &exp) {
   out_ << "(fn " << exp.param << " => " << *exp.body << ")";
 }
-void PrintExpVisitor::operator()(const AppExp &exp) {
+template <template <class> class Ptr>
+void PrintExpVisitor<Ptr>::operator()(const AppExp<Ptr> &exp) {
   out_ << "(" << *exp.fn << " " << *exp.arg << ")";
 }
-void PrintExpVisitor::operator()(const BopExp &exp) {
+template <template <class> class Ptr>
+void PrintExpVisitor<Ptr>::operator()(const BopExp<Ptr> &exp) {
   out_ << "(" << *exp.arg1 << " " << binOpString(exp.bop) << " " << *exp.arg2
        << ")";
 }
-void PrintExpVisitor::operator()(const IfExp &exp) {
+template <template <class> class Ptr>
+void PrintExpVisitor<Ptr>::operator()(const IfExp<Ptr> &exp) {
   out_ << "(if " << *exp.cond << " then " << *exp.then << " else " << *exp.els
        << ")";
 }
+
+template class PrintExpVisitor<std::unique_ptr>;
 
 } // namespace ast
 

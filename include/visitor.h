@@ -2,7 +2,6 @@
 #define VISITOR_H
 
 #include "anf.h"
-#include <stack>
 #include <variant>
 
 namespace lambcalc {

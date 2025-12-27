@@ -2,6 +2,7 @@
 #include "utils.h"
 #include "visitor.h"
 #include <memory>
+#include <stack>
 
 namespace lambcalc {
 namespace ast {
