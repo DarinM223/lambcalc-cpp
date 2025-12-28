@@ -1,15 +1,17 @@
 #include "rename.h"
 #include "utils.h"
 #include "visitor.h"
-#include <memory>
 #include <stack>
 
 namespace lambcalc {
 namespace ast {
 
+template <template <class> class Ptr>
 using AlphaRenamePipeline =
-    WorklistVisitor<DefaultVisitor, WorklistTask<Exp<>>, std::stack>;
-class AlphaRenameVisitor : public AlphaRenamePipeline {
+    WorklistVisitor<DefaultVisitor, WorklistTask<Exp<Ptr>, Ptr>, std::stack,
+                    Ptr>;
+template <template <class> class Ptr>
+class AlphaRenameVisitor : public AlphaRenamePipeline<Ptr> {
   int counter_;
   std::unordered_map<std::string, std::string> rename_;
 
@@ -19,8 +21,9 @@ class AlphaRenameVisitor : public AlphaRenamePipeline {
 
 public:
   AlphaRenameVisitor() : counter_(0) {}
-  using AlphaRenamePipeline::operator();
-  void operator()(LamExp<std::unique_ptr> &exp) {
+  using AlphaRenamePipeline<Ptr>::operator();
+  using AlphaRenamePipeline<Ptr>::getWorklist;
+  void operator()(LamExp<Ptr> &exp) {
     auto renamed = fresh(exp.param);
     std::optional<std::string> oldRenameParam =
         rename_.contains(exp.param) ? std::optional{rename_[exp.param]}
@@ -37,7 +40,7 @@ public:
                               rename_.erase(expParam);
                             }
                           });
-    AlphaRenamePipeline::operator()(exp);
+    AlphaRenamePipeline<Ptr>::operator()(exp);
   }
   void operator()(VarExp &exp) {
     if (rename_.contains(exp.name)) {
@@ -48,8 +51,8 @@ public:
   }
 };
 
-void rename(ast::Exp<> &exp) {
-  AlphaRenameVisitor visitor;
+template <template <class> class Ptr> void rename(ast::Exp<Ptr> &exp) {
+  AlphaRenameVisitor<Ptr> visitor;
   auto &worklist = visitor.getWorklist();
   std::visit(visitor, exp);
   while (!worklist.empty()) {
@@ -63,6 +66,8 @@ void rename(ast::Exp<> &exp) {
                task);
   }
 }
+
+template void rename(ast::Exp<std::unique_ptr> &);
 
 } // namespace ast
 } // namespace lambcalc
