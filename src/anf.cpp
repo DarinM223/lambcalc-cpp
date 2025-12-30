@@ -120,14 +120,12 @@ Exp::~Exp() {
   }
 }
 
-struct KFrame;
-struct K2Frame;
-
-using K = std::vector<KFrame>;
-using K2 = std::vector<K2Frame>;
-
-struct K2_Lam1 {
-  K k;
+template <template <class> class Ptr> struct KFrame;
+template <template <class> class Ptr> struct K2Frame;
+template <template <class> class Ptr> using K = std::vector<KFrame<Ptr>>;
+template <template <class> class Ptr> using K2 = std::vector<K2Frame<Ptr>>;
+template <template <class> class Ptr> struct K2_Lam1 {
+  K<Ptr> k;
   std::string v;
 };
 
@@ -147,15 +145,15 @@ struct K2_Bop1 {
   Value x, y;
 };
 
-struct K2_If1 {
-  ast::Exp<> &t;
-  ast::Exp<> &f;
+template <template <class> class Ptr> struct K2_If1 {
+  ast::Exp<Ptr> &t;
+  ast::Exp<Ptr> &f;
   std::string j, p;
   Value c;
 };
 
-struct K2_If2 {
-  ast::Exp<> &f;
+template <template <class> class Ptr> struct K2_If2 {
+  ast::Exp<Ptr> &f;
   std::string j, p;
   Value c;
   std::unique_ptr<Exp> rest;
@@ -168,21 +166,23 @@ struct K2_If3 {
   std::unique_ptr<Exp> rest;
 };
 
-struct K2Frame : public std::variant<K2_Lam1, K2_Lam2, K2_App1, K2_Bop1, K2_If1,
-                                     K2_If2, K2_If3> {
-  using variant::variant;
+template <template <class> class Ptr>
+struct K2Frame : public std::variant<K2_Lam1<Ptr>, K2_Lam2, K2_App1, K2_Bop1,
+                                     K2_If1<Ptr>, K2_If2<Ptr>, K2_If3> {
+  using std::variant<K2_Lam1<Ptr>, K2_Lam2, K2_App1, K2_Bop1, K2_If1<Ptr>,
+                     K2_If2<Ptr>, K2_If3>::variant;
 };
 
-struct K_App1 {
-  ast::Exp<> &x;
+template <template <class> class Ptr> struct K_App1 {
+  ast::Exp<Ptr> &x;
 };
 
 struct K_App2 {
   Value f;
 };
 
-struct K_Bop1 {
-  ast::Exp<> &y;
+template <template <class> class Ptr> struct K_Bop1 {
+  ast::Exp<Ptr> &y;
   ast::Bop bop;
 };
 
@@ -191,28 +191,31 @@ struct K_Bop2 {
   ast::Bop bop;
 };
 
-struct K_If1 {
-  ast::Exp<> &t;
-  ast::Exp<> &f;
+template <template <class> class Ptr> struct K_If1 {
+  ast::Exp<Ptr> &t;
+  ast::Exp<Ptr> &f;
 };
 
 struct K_If2 {
   std::string j;
 };
 
-struct KFrame
-    : public std::variant<K_App1, K_App2, K_Bop1, K_Bop2, K_If1, K_If2> {
-  using variant::variant;
+template <template <class> class Ptr>
+struct KFrame : public std::variant<K_App1<Ptr>, K_App2, K_Bop1<Ptr>, K_Bop2,
+                                    K_If1<Ptr>, K_If2> {
+  using std::variant<K_App1<Ptr>, K_App2, K_Bop1<Ptr>, K_Bop2, K_If1<Ptr>,
+                     K_If2>::variant;
 };
 
-std::unique_ptr<Exp> convertDefunc(ast::Exp<> &root) {
+template <template <class> class Ptr>
+std::unique_ptr<Exp> convertDefunc(ast::Exp<Ptr> &root) {
   // Parameters for apply_k2, apply_k, and go normalized.
   // If two parameters for different functions have the same type,
   // they can share the same variable because tail calls destroy the stack.
-  ast::Exp<> *go_exp = &root;
+  ast::Exp<Ptr> *go_exp = &root;
   std::unique_ptr<Exp> k2_exp;
-  K k;
-  K2 k2;
+  K<Ptr> k;
+  K2<Ptr> k2;
   Value value;
 
   enum { APPLY_K2, APPLY_K, GO } dispatch = GO;
@@ -227,7 +230,7 @@ std::unique_ptr<Exp> convertDefunc(ast::Exp<> &root) {
       k2.pop_back();
       std::visit(
           overloaded{
-              [&](K2_Lam1 &frame) {
+              [&](K2_Lam1<Ptr> &frame) {
                 auto f = fresh();
                 k = std::move(frame.k);
                 value = VarValue{f};
@@ -254,16 +257,16 @@ std::unique_ptr<Exp> convertDefunc(ast::Exp<> &root) {
                                      .param2 = std::move(frame.y),
                                      .rest = std::move(k2_exp)});
               },
-              [&](K2_If1 &frame) {
+              [&](K2_If1<Ptr> &frame) {
                 go_exp = &frame.t;
-                k2.emplace_back(std::in_place_type<K2_If2>, frame.f, frame.j,
-                                std::move(frame.p), std::move(frame.c),
+                k2.emplace_back(std::in_place_type<K2_If2<Ptr>>, frame.f,
+                                frame.j, std::move(frame.p), std::move(frame.c),
                                 std::move(k2_exp));
                 k.clear();
                 k.emplace_back(std::in_place_type<K_If2>, frame.j);
                 dispatch = GO;
               },
-              [&](K2_If2 &frame) {
+              [&](K2_If2<Ptr> &frame) {
                 go_exp = &frame.f;
                 k2.emplace_back(std::in_place_type<K2_If3>, std::move(k2_exp),
                                 frame.j, std::move(frame.p), std::move(frame.c),
@@ -295,7 +298,7 @@ std::unique_ptr<Exp> convertDefunc(ast::Exp<> &root) {
       k.pop_back();
       std::visit(
           overloaded{
-              [&](K_App1 &frame) {
+              [&](K_App1<Ptr> &frame) {
                 go_exp = &frame.x;
                 k.emplace_back(std::in_place_type<K_App2>, std::move(value));
                 dispatch = GO;
@@ -314,7 +317,7 @@ std::unique_ptr<Exp> convertDefunc(ast::Exp<> &root) {
                                       }},
                            frame.f);
               },
-              [&](K_Bop1 &frame) {
+              [&](K_Bop1<Ptr> &frame) {
                 go_exp = &frame.y;
                 k.emplace_back(std::in_place_type<K_Bop2>, std::move(value),
                                frame.bop);
@@ -326,12 +329,12 @@ std::unique_ptr<Exp> convertDefunc(ast::Exp<> &root) {
                                 std::move(frame.x), std::move(value));
                 value = VarValue{r};
               },
-              [&](K_If1 &frame) {
+              [&](K_If1<Ptr> &frame) {
                 auto j = fresh();
                 auto p = fresh();
 
-                k2.emplace_back(std::in_place_type<K2_If1>, frame.t, frame.f,
-                                std::move(j), p, std::move(value));
+                k2.emplace_back(std::in_place_type<K2_If1<Ptr>>, frame.t,
+                                frame.f, std::move(j), p, std::move(value));
                 value = VarValue{p};
               },
               [&](K_If2 &frame) {
@@ -344,42 +347,47 @@ std::unique_ptr<Exp> convertDefunc(ast::Exp<> &root) {
       break;
     }
     case GO:
-      std::visit(
-          overloaded{
-              [&](ast::IntExp &exp) {
-                value = IntValue{exp.value};
-                dispatch = APPLY_K;
-              },
-              [&](ast::VarExp &exp) {
-                value = VarValue{exp.name};
-                dispatch = APPLY_K;
-              },
-              [&](ast::LamExp<std::unique_ptr> &exp) {
-                go_exp = exp.body.get();
-                K oldK;
-                k.swap(oldK);
-                k2.emplace_back(std::in_place_type<K2_Lam1>, std::move(oldK),
-                                exp.param);
-              },
-              [&](ast::AppExp<std::unique_ptr> &exp) {
-                go_exp = exp.fn.get();
-                k.emplace_back(std::in_place_type<K_App1>, *exp.arg);
-              },
-              [&](ast::BopExp<std::unique_ptr> &exp) {
-                go_exp = exp.arg1.get();
-                k.emplace_back(std::in_place_type<K_Bop1>, *exp.arg2, exp.bop);
-              },
-              [&](ast::IfExp<std::unique_ptr> &exp) {
-                go_exp = exp.cond.get();
-                k.emplace_back(std::in_place_type<K_If1>, *exp.then, *exp.els);
-              },
-          },
-          *go_exp);
+      std::visit(overloaded{
+                     [&](ast::IntExp &exp) {
+                       value = IntValue{exp.value};
+                       dispatch = APPLY_K;
+                     },
+                     [&](ast::VarExp &exp) {
+                       value = VarValue{exp.name};
+                       dispatch = APPLY_K;
+                     },
+                     [&](ast::LamExp<Ptr> &exp) {
+                       go_exp = &*exp.body;
+                       K<Ptr> oldK;
+                       k.swap(oldK);
+                       k2.emplace_back(std::in_place_type<K2_Lam1<Ptr>>,
+                                       std::move(oldK), exp.param);
+                     },
+                     [&](ast::AppExp<Ptr> &exp) {
+                       go_exp = &*exp.fn;
+                       k.emplace_back(std::in_place_type<K_App1<Ptr>>,
+                                      *exp.arg);
+                     },
+                     [&](ast::BopExp<Ptr> &exp) {
+                       go_exp = &*exp.arg1;
+                       k.emplace_back(std::in_place_type<K_Bop1<Ptr>>,
+                                      *exp.arg2, exp.bop);
+                     },
+                     [&](ast::IfExp<Ptr> &exp) {
+                       go_exp = &*exp.cond;
+                       k.emplace_back(std::in_place_type<K_If1<Ptr>>, *exp.then,
+                                      *exp.els);
+                     },
+                 },
+                 *go_exp);
       break;
     }
   }
   return nullptr;
 }
+
+template std::unique_ptr<Exp> convertDefunc(ast::Exp<std::unique_ptr> &root);
+template std::unique_ptr<Exp> convertDefunc(ast::Exp<raw_ptr> &root);
 
 std::string Exp::dump() {
   std::ostringstream out;
