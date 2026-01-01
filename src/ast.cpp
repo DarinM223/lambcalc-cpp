@@ -1,5 +1,7 @@
 #include "ast.h"
+#include "utils.h"
 #include "visitor.h"
+#include <concepts>
 #include <memory>
 #include <queue>
 #include <sstream>
@@ -21,20 +23,23 @@ struct DestructorVisitor
     : WorklistVisitor<DefaultVisitor, DestructorTask<Exp<>>, std::queue> {};
 
 template <template <class> class Ptr> Exp<Ptr>::~Exp() {
-  DestructorVisitor visitor;
-  auto &queue = visitor.getWorklist();
-  std::visit(visitor, *this);
-  while (!queue.empty()) {
-    auto task = std::move(queue.front());
-    queue.pop();
+  if constexpr (std::same_as<Ptr<int>, std::unique_ptr<int>>) {
+    DestructorVisitor visitor;
+    auto &queue = visitor.getWorklist();
+    std::visit(visitor, *this);
+    while (!queue.empty()) {
+      auto task = std::move(queue.front());
+      queue.pop();
 
-    if (task.exp != nullptr) {
-      std::visit(visitor, *task.exp);
+      if (task.exp != nullptr) {
+        std::visit(visitor, *task.exp);
+      }
     }
   }
 }
 
 template struct Exp<std::unique_ptr>;
+template struct Exp<raw_ptr>;
 
 }; // namespace ast
 } // namespace lambcalc

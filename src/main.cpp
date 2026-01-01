@@ -8,6 +8,7 @@
 #include "rename.h"
 #include "llvm/Support/TargetSelect.h"
 #include <iostream>
+#include <memory>
 
 using namespace lambcalc;
 
@@ -28,7 +29,8 @@ int main() {
   std::unique_ptr<llvm::orc::KaleidoscopeJIT> jit =
       ExitOnErr(llvm::orc::KaleidoscopeJIT::Create());
   Lexer lexer(std::cin);
-  Parser parser(lexer, defaultInfixBp);
+  std::allocator<ast::Exp<>> allocator;
+  Parser parser(allocator, lexer, defaultInfixBp);
   while (true) {
     // If a peek token is already buffered, consume it.
     if (parser.getPeekToken() && *parser.getPeekToken() == Token::Semicolon) {

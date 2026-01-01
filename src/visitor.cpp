@@ -1,4 +1,5 @@
 #include "visitor.h"
+#include "utils.h"
 #include <utility>
 #include <variant>
 
@@ -73,6 +74,7 @@ void PrintExpVisitor<Ptr>::operator()(const IfExp<Ptr> &exp) {
 }
 
 template class PrintExpVisitor<std::unique_ptr>;
+template class PrintExpVisitor<raw_ptr>;
 
 } // namespace ast
 
