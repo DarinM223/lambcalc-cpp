@@ -10,12 +10,14 @@ namespace arena {
 
 class Allocator {
   char *begin_;
+  char *orig_;
   char *end_;
 
 public:
-  Allocator(char *begin, char *end) : begin_(begin), end_(end) {}
+  Allocator(char *begin, char *end) : begin_(begin), orig_(begin), end_(end) {}
   constexpr Allocator(const Allocator &other) noexcept {
     begin_ = other.begin_;
+    orig_ = other.orig_;
     end_ = other.end_;
   }
 
@@ -30,6 +32,8 @@ public:
     begin_ += pad + count * size;
     return new (ptr) T[count]{};
   }
+
+  void reset() { begin_ = orig_; }
 };
 
 template <typename T> class TypedAllocator {
