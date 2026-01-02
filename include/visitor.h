@@ -25,7 +25,7 @@ using FnTask = std::move_only_function<void(void)>;
 
 template <typename Exp, template <class> class Ptr = std::unique_ptr>
 struct WorklistTask : std::variant<NodeTask<Exp, Ptr>, FnTask> {
-  using std::variant<NodeTask<Exp>, FnTask>::variant;
+  using std::variant<NodeTask<Exp, Ptr>, FnTask>::variant;
   explicit WorklistTask(Ptr<Exp> *parentLink)
       : WorklistTask(std::in_place_index<0>, parentLink, **parentLink) {}
 };
@@ -61,9 +61,9 @@ public:
   void operator()(const IfExp<Ptr> &exp);
 };
 
-template <typename Visitor, Task T, template <class> class W,
+template <typename Visitor, typename T, template <class> class W,
           template <class> class Ptr = std::unique_ptr>
-  requires Worklist<W<T>, T>
+  requires(Worklist<W<T>, T>, Task<T, Ptr>)
 class WorklistVisitor : public Visitor {
   W<T> worklist;
 

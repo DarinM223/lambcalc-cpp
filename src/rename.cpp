@@ -58,8 +58,8 @@ template <template <class> class Ptr> void rename(ast::Exp<Ptr> &exp) {
   while (!worklist.empty()) {
     auto task = std::move(worklist.top());
     worklist.pop();
-    std::visit(overloaded{[&](NodeTask<Exp<>> &n) {
-                            Exp<> &exp = std::get<1>(n);
+    std::visit(overloaded{[&](NodeTask<Exp<Ptr>, Ptr> &n) {
+                            Exp<Ptr> &exp = std::get<1>(n);
                             std::visit(visitor, exp);
                           },
                           [](FnTask &f) { std::move(f)(); }},
@@ -68,6 +68,7 @@ template <template <class> class Ptr> void rename(ast::Exp<Ptr> &exp) {
 }
 
 template void rename(ast::Exp<std::unique_ptr> &);
+template void rename(ast::Exp<raw_ptr> &);
 
 } // namespace ast
 } // namespace lambcalc
