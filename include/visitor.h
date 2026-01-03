@@ -2,7 +2,6 @@
 #define VISITOR_H
 
 #include "anf.h"
-#include <stack>
 #include <variant>
 
 namespace lambcalc {
@@ -20,20 +19,21 @@ struct DefaultVisitor {
   void operator()(auto &) {}
 };
 
-template <typename Exp>
-using NodeTask = std::pair<std::unique_ptr<Exp> *, std::reference_wrapper<Exp>>;
+template <typename Exp, template <class> class Ptr = std::unique_ptr>
+using NodeTask = std::pair<Ptr<Exp> *, std::reference_wrapper<Exp>>;
 using FnTask = std::move_only_function<void(void)>;
 
-template <typename Exp>
-struct WorklistTask : std::variant<NodeTask<Exp>, FnTask> {
-  using std::variant<NodeTask<Exp>, FnTask>::variant;
-  explicit WorklistTask(std::unique_ptr<Exp> *parentLink)
+template <typename Exp, template <class> class Ptr = std::unique_ptr>
+struct WorklistTask : std::variant<NodeTask<Exp, Ptr>, FnTask> {
+  using std::variant<NodeTask<Exp, Ptr>, FnTask>::variant;
+  explicit WorklistTask(Ptr<Exp> *parentLink)
       : WorklistTask(std::in_place_index<0>, parentLink, **parentLink) {}
 };
 
-template <typename Exp> struct DestructorTask {
-  std::unique_ptr<Exp> exp;
-  explicit DestructorTask(std::unique_ptr<Exp> *parentLink)
+template <typename Exp, template <class> class Ptr = std::unique_ptr>
+struct DestructorTask {
+  Ptr<Exp> exp;
+  explicit DestructorTask(Ptr<Exp> *parentLink)
       : exp(parentLink == nullptr ? nullptr : std::move(*parentLink)) {}
 };
 
@@ -42,12 +42,12 @@ concept Worklist = requires(T worklist, Task task) { worklist.push(task); };
 
 namespace ast {
 
-template <typename T>
-concept Task = requires(T task, std::unique_ptr<Exp> *parentLink) {
+template <typename T, template <class> class Ptr = std::unique_ptr>
+concept Task = requires(T task, Ptr<Exp<Ptr>> *parentLink) {
   { T(parentLink) } -> std::same_as<T>;
 };
 
-class PrintExpVisitor {
+template <template <class> class Ptr> class PrintExpVisitor {
   std::ostream &out_;
 
 public:
@@ -55,25 +55,25 @@ public:
       : out_(out) {}
   void operator()(const IntExp &exp);
   void operator()(const VarExp &exp);
-  void operator()(const LamExp &exp);
-  void operator()(const AppExp &exp);
-  void operator()(const BopExp &exp);
-  void operator()(const IfExp &exp);
+  void operator()(const LamExp<Ptr> &exp);
+  void operator()(const AppExp<Ptr> &exp);
+  void operator()(const BopExp<Ptr> &exp);
+  void operator()(const IfExp<Ptr> &exp);
 };
 
-template <typename Visitor, Task T, template <class> class W>
-  requires Worklist<W<T>, T>
+template <typename Visitor, typename T, template <class> class W,
+          template <class> class Ptr = std::unique_ptr>
+  requires(Worklist<W<T>, T>, Task<T, Ptr>)
 class WorklistVisitor : public Visitor {
   W<T> worklist;
 
 public:
   template <class... Args> WorklistVisitor(Args... args) : Visitor(args...) {}
   W<T> &getWorklist() { return worklist; }
-  virtual void addWorklist(std::unique_ptr<Exp> *parentLink) {
+  virtual void addWorklist(Ptr<Exp<Ptr>> *parentLink) {
     worklist.push(T(parentLink));
   }
-  virtual void addWorklist(const std::string &,
-                           std::unique_ptr<Exp> *parentLink) {
+  virtual void addWorklist(const std::string &, Ptr<Exp<Ptr>> *parentLink) {
     addWorklist(parentLink);
   }
 
@@ -82,16 +82,16 @@ public:
 
   decltype(auto) operator()(IntExp &exp) { return Visitor::operator()(exp); }
   decltype(auto) operator()(VarExp &exp) { return Visitor::operator()(exp); }
-  decltype(auto) operator()(LamExp &exp) {
+  decltype(auto) operator()(LamExp<Ptr> &exp) {
     DISPATCH(addWorklist(exp.param, &exp.body);)
   }
-  decltype(auto) operator()(AppExp &exp) {
+  decltype(auto) operator()(AppExp<Ptr> &exp) {
     DISPATCH(addWorklist(&exp.fn); addWorklist(&exp.arg);)
   }
-  decltype(auto) operator()(BopExp &exp) {
+  decltype(auto) operator()(BopExp<Ptr> &exp) {
     DISPATCH(addWorklist(&exp.arg1); addWorklist(&exp.arg2);)
   }
-  decltype(auto) operator()(IfExp &exp) {
+  decltype(auto) operator()(IfExp<Ptr> &exp) {
     DISPATCH(addWorklist(&exp.cond); addWorklist(&exp.then);
              addWorklist(&exp.els);)
   }

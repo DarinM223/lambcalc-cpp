@@ -1,5 +1,8 @@
 #include "parser.h"
+#include "arena.h"
+#include "utils.h"
 #include <cassert>
+#include <memory>
 
 namespace lambcalc {
 
@@ -16,7 +19,8 @@ static std::optional<ast::Bop> parseOp(const Token &token) {
   }
 }
 
-std::unique_ptr<ast::Exp> Parser::parseFn() {
+template <template <class> class Ptr, typename Allocator>
+Ptr<ast::Exp<Ptr>> Parser<Ptr, Allocator>::parseFn() {
   nextToken();
   assert(getCurrentToken() == Token::Identifier &&
          "Expected variable parameter");
@@ -25,10 +29,11 @@ std::unique_ptr<ast::Exp> Parser::parseFn() {
   assert(getCurrentToken() == Token::Arrow &&
          "Expected arrow after function parameter");
   auto body = parseExpression();
-  return ast::make(ast::LamExp{std::move(param), std::move(body)});
+  return make(ast::LamExp<Ptr>{std::move(param), std::move(body)});
 }
 
-std::unique_ptr<ast::Exp> Parser::parseIf() {
+template <template <class> class Ptr, typename Allocator>
+Ptr<ast::Exp<Ptr>> Parser<Ptr, Allocator>::parseIf() {
   auto cond = parseExpression();
   nextToken();
   assert(getCurrentToken() == Token::Then &&
@@ -38,29 +43,31 @@ std::unique_ptr<ast::Exp> Parser::parseIf() {
   assert(getCurrentToken() == Token::Else &&
          "Expected else after then expression");
   auto els = parseExpression();
-  return ast::make(
-      ast::IfExp{std::move(cond), std::move(then), std::move(els)});
+  return make(
+      ast::IfExp<Ptr>{std::move(cond), std::move(then), std::move(els)});
 }
 
-std::unique_ptr<ast::Exp> Parser::parseParens() {
+template <template <class> class Ptr, typename Allocator>
+Ptr<ast::Exp<Ptr>> Parser<Ptr, Allocator>::parseParens() {
   auto exp = parseExpression();
   nextToken();
   assert(getCurrentToken() == Token::RParen && "Expected right parenthesis");
   return exp;
 }
 
-std::unique_ptr<ast::Exp> Parser::parsePrimary() {
+template <template <class> class Ptr, typename Allocator>
+Ptr<ast::Exp<Ptr>> Parser<Ptr, Allocator>::parsePrimary() {
   switch (getCurrentToken()) {
   case Token::LParen:
     return parseParens();
   case Token::Number:
-    return ast::make(ast::IntExp{lexer_.getNumber()});
+    return make(ast::IntExp{lexer_.getNumber()});
   case Token::Fn:
     return parseFn();
   case Token::If:
     return parseIf();
   case Token::Identifier:
-    return ast::make(ast::VarExp{lexer_.getIdentifier()});
+    return make(ast::VarExp{lexer_.getIdentifier()});
   default:
     throw ParserException(
         "Invalid token: " + std::to_string(static_cast<int>(getCurrentToken())),
@@ -70,9 +77,10 @@ std::unique_ptr<ast::Exp> Parser::parsePrimary() {
 
 constexpr int baseBP = 0;
 
-std::unique_ptr<ast::Exp> Parser::parseBinOp(int minBP) {
+template <template <class> class Ptr, typename Allocator>
+Ptr<ast::Exp<Ptr>> Parser<Ptr, Allocator>::parseBinOp(int minBP) {
   nextToken();
-  std::unique_ptr<ast::Exp> lhs = parsePrimary();
+  Ptr<ast::Exp<Ptr>> lhs = parsePrimary();
 
   int appLbp = 100, appRbp = 101;
   while (true) {
@@ -88,7 +96,7 @@ std::unique_ptr<ast::Exp> Parser::parseBinOp(int minBP) {
 
         nextToken();
         auto rhs = parseBinOp(rbp);
-        lhs = ast::make(ast::BopExp{*bop, std::move(lhs), std::move(rhs)});
+        lhs = make(ast::BopExp<Ptr>{*bop, std::move(lhs), std::move(rhs)});
       } else {
         return lhs;
       }
@@ -100,15 +108,19 @@ std::unique_ptr<ast::Exp> Parser::parseBinOp(int minBP) {
       }
 
       auto rhs = parseBinOp(appRbp);
-      lhs = ast::make(ast::AppExp{std::move(lhs), std::move(rhs)});
+      lhs = make(ast::AppExp<Ptr>{std::move(lhs), std::move(rhs)});
     } else {
       return lhs;
     }
   }
 }
 
-std::unique_ptr<ast::Exp> Parser::parseExpression() {
+template <template <class> class Ptr, typename Allocator>
+Ptr<ast::Exp<Ptr>> Parser<Ptr, Allocator>::parseExpression() {
   return parseBinOp(baseBP);
 }
+
+template class Parser<std::unique_ptr, std::allocator<ast::Exp<>>>;
+template class Parser<raw_ptr, arena::TypedAllocator<ast::Exp<raw_ptr>>>;
 
 } // namespace lambcalc

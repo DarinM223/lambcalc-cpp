@@ -1,8 +1,11 @@
 #ifndef UTILS_H
 #define UTILS_H
 
+#include <algorithm>
 #include <deque>
 #include <vector>
+
+template <typename T> using raw_ptr = T *;
 
 /**
  * Literal class type that wraps a constant expression string.

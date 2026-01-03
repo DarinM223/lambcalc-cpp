@@ -1,6 +1,7 @@
 #include "hoist.h"
 #include "utils.h"
 #include "visitor.h"
+#include <stack>
 
 namespace lambcalc {
 namespace anf {

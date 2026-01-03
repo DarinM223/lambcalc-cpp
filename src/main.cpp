@@ -1,14 +1,16 @@
 #include "KaleidoscopeJIT.h"
 #include "anf.h"
+#include "arena.h"
 #include "ast.h"
 #include "convert.h"
 #include "hoist.h"
 #include "lower.h"
 #include "parser.h"
 #include "rename.h"
+#include "utils.h"
 #include "llvm/Support/TargetSelect.h"
-#include "llvm/Target/TargetMachine.h"
 #include <iostream>
+#include <memory>
 
 using namespace lambcalc;
 
@@ -22,6 +24,11 @@ const std::unordered_map<ast::Bop, std::optional<std::pair<int, int>>>
                    {ast::Bop::Times, {{3, 4}}}};
 
 int main() {
+  alignas(alignof(ast::Exp<raw_ptr>)) static char buf[1 << 28];
+  char *ptr = std::launder(buf);
+  arena::Allocator allocator(ptr, ptr + sizeof(buf) / sizeof(*buf));
+  arena::TypedAllocator<ast::Exp<raw_ptr>> typed_allocator(allocator);
+
   llvm::InitializeNativeTarget();
   llvm::InitializeNativeTargetAsmPrinter();
   llvm::InitializeNativeTargetAsmParser();
@@ -29,15 +36,17 @@ int main() {
   std::unique_ptr<llvm::orc::KaleidoscopeJIT> jit =
       ExitOnErr(llvm::orc::KaleidoscopeJIT::Create());
   Lexer lexer(std::cin);
-  Parser parser(lexer, defaultInfixBp);
+  Parser<raw_ptr, arena::TypedAllocator<ast::Exp<raw_ptr>>> parser(
+      typed_allocator, lexer, defaultInfixBp);
   while (true) {
+    allocator.reset();
     // If a peek token is already buffered, consume it.
     if (parser.getPeekToken() && *parser.getPeekToken() == Token::Semicolon) {
       parser.nextToken();
       continue;
     }
     std::cout << "> ";
-    std::unique_ptr<ast::Exp> exp;
+    ast::Exp<raw_ptr> *exp;
     try {
       // If it reads a semicolon token at the start, go back to
       // beginning to consume it.

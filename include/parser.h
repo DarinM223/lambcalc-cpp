@@ -3,7 +3,9 @@
 
 #include "ast.h"
 #include "lexer.h"
+#include <memory>
 #include <optional>
+#include <utility>
 
 namespace lambcalc {
 
@@ -18,24 +20,35 @@ public:
   virtual const char *what() const throw() { return reason_.c_str(); }
 };
 
+template <template <class> class Ptr = std::unique_ptr,
+          typename Allocator = std::allocator<ast::Exp<Ptr>>>
 class Parser {
+  Allocator &allocator_;
   Lexer &lexer_;
   Token currentToken_;
   std::optional<Token> peekToken_;
   std::unordered_map<ast::Bop, std::optional<std::pair<int, int>>> infixBp_;
 
-  std::unique_ptr<ast::Exp> parseFn();
-  std::unique_ptr<ast::Exp> parseIf();
-  std::unique_ptr<ast::Exp> parseParens();
-  std::unique_ptr<ast::Exp> parsePrimary();
-  std::unique_ptr<ast::Exp> parseBinOp(int minBP);
+  Ptr<ast::Exp<Ptr>> parseFn();
+  Ptr<ast::Exp<Ptr>> parseIf();
+  Ptr<ast::Exp<Ptr>> parseParens();
+  Ptr<ast::Exp<Ptr>> parsePrimary();
+  Ptr<ast::Exp<Ptr>> parseBinOp(int minBP);
+
+  Ptr<ast::Exp<Ptr>> make(ast::Exp<Ptr> &&exp) {
+    ast::Exp<Ptr> *ptr = allocator_.allocate(1);
+    std::allocator_traits<Allocator>::construct(allocator_, ptr,
+                                                std::move(exp));
+    Ptr<ast::Exp<Ptr>> ptr2(ptr);
+    return ptr2;
+  }
 
 public:
   Parser(
-      Lexer &lexer,
+      Allocator &allocator, Lexer &lexer,
       std::unordered_map<ast::Bop, std::optional<std::pair<int, int>>> infixBp)
-      : lexer_(lexer), currentToken_(Token::Eof), infixBp_(std::move(infixBp)) {
-  }
+      : allocator_(allocator), lexer_(lexer), currentToken_(Token::Eof),
+        infixBp_(std::move(infixBp)) {}
   Token getCurrentToken() { return currentToken_; }
   void nextToken() {
     if (peekToken_) {
@@ -49,7 +62,7 @@ public:
   Token peekToken() {
     return peekToken_ ? *peekToken_ : *(peekToken_ = lexer_.getToken());
   }
-  std::unique_ptr<ast::Exp> parseExpression();
+  Ptr<ast::Exp<Ptr>> parseExpression();
 };
 
 } // namespace lambcalc

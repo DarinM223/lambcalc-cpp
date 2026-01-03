@@ -8,4 +8,5 @@ googletest-prefix/
 build/
 compile_commands.json
 *.a
+.cache
 src/anf-defunctionalization

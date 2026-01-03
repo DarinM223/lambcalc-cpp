@@ -13,7 +13,7 @@ struct Exp;
 } // namespace anf
 namespace ast {
 
-struct Exp;
+template <template <class> class Ptr = std::unique_ptr> struct Exp;
 
 struct IntExp {
   int value;
@@ -23,14 +23,14 @@ struct VarExp {
   std::string name;
 };
 
-struct LamExp {
+template <template <class> class Ptr> struct LamExp {
   std::string param;
-  std::unique_ptr<Exp> body;
+  Ptr<Exp<Ptr>> body;
 };
 
-struct AppExp {
-  std::unique_ptr<Exp> fn;
-  std::unique_ptr<Exp> arg;
+template <template <class> class Ptr> struct AppExp {
+  Ptr<Exp<Ptr>> fn;
+  Ptr<Exp<Ptr>> arg;
 };
 
 enum class Bop {
@@ -39,32 +39,36 @@ enum class Bop {
   Times,
 };
 
-struct BopExp {
+template <template <class> class Ptr> struct BopExp {
   Bop bop;
-  std::unique_ptr<Exp> arg1;
-  std::unique_ptr<Exp> arg2;
+  Ptr<Exp<Ptr>> arg1;
+  Ptr<Exp<Ptr>> arg2;
 };
 
-struct IfExp {
-  std::unique_ptr<Exp> cond;
-  std::unique_ptr<Exp> then;
-  std::unique_ptr<Exp> els;
+template <template <class> class Ptr> struct IfExp {
+  Ptr<Exp<Ptr>> cond;
+  Ptr<Exp<Ptr>> then;
+  Ptr<Exp<Ptr>> els;
 };
 
-struct Exp
-    : public std::variant<IntExp, VarExp, LamExp, AppExp, BopExp, IfExp> {
-  using variant::variant;
-  friend std::ostream &operator<<(std::ostream &os, const Exp &exp);
+template <template <class> class Ptr>
+struct Exp : public std::variant<IntExp, VarExp, LamExp<Ptr>, AppExp<Ptr>,
+                                 BopExp<Ptr>, IfExp<Ptr>> {
+  using std::variant<IntExp, VarExp, LamExp<Ptr>, AppExp<Ptr>, BopExp<Ptr>,
+                     IfExp<Ptr>>::variant;
+
+  template <template <class> class P>
+  friend std::ostream &operator<<(std::ostream &os, const Exp<P> &exp);
   std::string dump();
 
-  std::unique_ptr<anf::Exp>
-  convert(std::function<std::unique_ptr<anf::Exp>(anf::Value)> k);
   // Need to redefine the move constructor after defining the destructor :(
-  Exp(Exp &&) = default;
+  Exp(Exp<Ptr> &&) = default;
   ~Exp();
 };
 
-std::unique_ptr<Exp> make(Exp &&exp);
+std::unique_ptr<Exp<>> make(Exp<> &&exp);
+std::unique_ptr<anf::Exp>
+convert(Exp<> &exp, std::function<std::unique_ptr<anf::Exp>(anf::Value)> k);
 
 } // namespace ast
 } // namespace lambcalc
