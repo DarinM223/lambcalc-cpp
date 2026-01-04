@@ -27,7 +27,7 @@ int main() {
   alignas(alignof(ast::Exp<raw_ptr>)) static char buf[1 << 28];
   char *ptr = std::launder(buf);
   arena::Allocator allocator(ptr, ptr + sizeof(buf) / sizeof(*buf));
-  arena::TypedAllocator<ast::Exp<raw_ptr>> typed_allocator(allocator);
+  arena::TypedAllocator<ast::Exp<raw_ptr>> typedAllocator(allocator);
 
   llvm::InitializeNativeTarget();
   llvm::InitializeNativeTargetAsmPrinter();
@@ -37,7 +37,7 @@ int main() {
       ExitOnErr(llvm::orc::KaleidoscopeJIT::Create());
   Lexer lexer(std::cin);
   Parser<raw_ptr, arena::TypedAllocator<ast::Exp<raw_ptr>>> parser(
-      typed_allocator, lexer, defaultInfixBp);
+      typedAllocator, lexer, defaultInfixBp);
   while (true) {
     allocator.reset();
     // If a peek token is already buffered, consume it.

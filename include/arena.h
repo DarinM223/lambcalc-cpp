@@ -21,10 +21,9 @@ public:
     end_ = other.end_;
   }
 
-  template <typename T> T *allocate(std::ptrdiff_t count = 1) {
-    std::ptrdiff_t size = sizeof(T);
-    std::ptrdiff_t pad =
-        -reinterpret_cast<std::uintptr_t>(begin_) & (alignof(T) - 1);
+  template <typename T> T *allocate(ptrdiff_t count = 1) {
+    ptrdiff_t size = sizeof(T);
+    ptrdiff_t pad = -reinterpret_cast<uintptr_t>(begin_) & (alignof(T) - 1);
     if (count >= (end_ - begin_ - pad) / size) {
       throw std::bad_alloc();
     }
@@ -46,8 +45,8 @@ public:
   explicit constexpr TypedAllocator(const TypedAllocator<U> &other) noexcept {
     allocator_ = other.allocator_;
   }
-  T *allocate(std::ptrdiff_t n = 1) { return allocator_.allocate<T>(n); }
-  void deallocate(T *, std::ptrdiff_t) noexcept {}
+  T *allocate(ptrdiff_t n = 1) { return allocator_.allocate<T>(n); }
+  void deallocate(T *, ptrdiff_t) noexcept {}
   friend bool operator==(const TypedAllocator &a, const TypedAllocator &b) {
     return &a.allocator_ == &b.allocator_;
   }

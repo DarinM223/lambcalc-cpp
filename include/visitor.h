@@ -7,13 +7,16 @@
 namespace lambcalc {
 
 #define DISPATCH(GO)                                                           \
-  if constexpr (std::is_same_v<RetTy, void>) {                                 \
-    Visitor::operator()(exp);                                                  \
-    GO                                                                         \
-  } else {                                                                     \
-    auto result = Visitor::operator()(exp);                                    \
-    GO return result;                                                          \
-  }
+  do {                                                                         \
+    if constexpr (std::is_same_v<RetTy, void>) {                               \
+      Visitor::operator()(exp);                                                \
+      GO;                                                                      \
+    } else {                                                                   \
+      auto result = Visitor::operator()(exp);                                  \
+      GO;                                                                      \
+      return result;                                                           \
+    }                                                                          \
+  } while (0)
 
 struct DefaultVisitor {
   void operator()(auto &) {}
@@ -83,17 +86,26 @@ public:
   decltype(auto) operator()(IntExp &exp) { return Visitor::operator()(exp); }
   decltype(auto) operator()(VarExp &exp) { return Visitor::operator()(exp); }
   decltype(auto) operator()(LamExp<Ptr> &exp) {
-    DISPATCH(addWorklist(exp.param, &exp.body);)
+    DISPATCH(addWorklist(exp.param, &exp.body));
   }
   decltype(auto) operator()(AppExp<Ptr> &exp) {
-    DISPATCH(addWorklist(&exp.fn); addWorklist(&exp.arg);)
+    DISPATCH({
+      addWorklist(&exp.fn);
+      addWorklist(&exp.arg);
+    });
   }
   decltype(auto) operator()(BopExp<Ptr> &exp) {
-    DISPATCH(addWorklist(&exp.arg1); addWorklist(&exp.arg2);)
+    DISPATCH({
+      addWorklist(&exp.arg1);
+      addWorklist(&exp.arg2);
+    });
   }
   decltype(auto) operator()(IfExp<Ptr> &exp) {
-    DISPATCH(addWorklist(&exp.cond); addWorklist(&exp.then);
-             addWorklist(&exp.els);)
+    DISPATCH({
+      addWorklist(&exp.cond);
+      addWorklist(&exp.then);
+      addWorklist(&exp.els);
+    });
   }
 };
 
@@ -147,8 +159,10 @@ public:
 
   decltype(auto) operator()(HaltExp &exp) { return Visitor::operator()(exp); }
   decltype(auto) operator()(FunExp &exp) {
-    DISPATCH(addWorklist(exp.params, &exp.body);
-             addWorklist(exp.name, &exp.rest);)
+    DISPATCH({
+      addWorklist(exp.params, &exp.body);
+      addWorklist(exp.name, &exp.rest);
+    });
   }
   decltype(auto) operator()(JoinExp &exp) {
     DISPATCH({
@@ -158,23 +172,26 @@ public:
         addWorklist(&exp.body);
       }
       addWorklist(exp.name, &exp.rest);
-    })
+    });
   }
   decltype(auto) operator()(JumpExp &exp) { return Visitor::operator()(exp); }
   decltype(auto) operator()(AppExp &exp) {
-    DISPATCH(addWorklist(exp.name, &exp.rest);)
+    DISPATCH(addWorklist(exp.name, &exp.rest));
   }
   decltype(auto) operator()(BopExp &exp) {
-    DISPATCH(addWorklist(exp.name, &exp.rest);)
+    DISPATCH(addWorklist(exp.name, &exp.rest));
   }
   decltype(auto) operator()(IfExp &exp) {
-    DISPATCH(addWorklist(&exp.thenBranch); addWorklist(&exp.elseBranch);)
+    DISPATCH({
+      addWorklist(&exp.thenBranch);
+      addWorklist(&exp.elseBranch);
+    });
   }
   decltype(auto) operator()(TupleExp &exp) {
-    DISPATCH(addWorklist(exp.name, &exp.rest);)
+    DISPATCH(addWorklist(exp.name, &exp.rest));
   }
   decltype(auto) operator()(ProjExp &exp) {
-    DISPATCH(addWorklist(exp.name, &exp.rest);)
+    DISPATCH(addWorklist(exp.name, &exp.rest));
   }
 };
 
