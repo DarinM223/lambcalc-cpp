@@ -122,5 +122,6 @@ Ptr<ast::Exp<Ptr>> Parser<Ptr, Allocator>::parseExpression() {
 
 template class Parser<std::unique_ptr, std::allocator<ast::Exp<>>>;
 template class Parser<raw_ptr, arena::TypedAllocator<ast::Exp<raw_ptr>>>;
+template class Parser<raw_ptr, arena::TypedLinkedAllocator<ast::Exp<raw_ptr>>>;
 
 } // namespace lambcalc

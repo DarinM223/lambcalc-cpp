@@ -24,10 +24,8 @@ const std::unordered_map<ast::Bop, std::optional<std::pair<int, int>>>
                    {ast::Bop::Times, {{3, 4}}}};
 
 int main() {
-  alignas(alignof(ast::Exp<raw_ptr>)) static char buf[1 << 28];
-  char *ptr = std::launder(buf);
-  arena::Allocator allocator(ptr, ptr + sizeof(buf) / sizeof(*buf));
-  arena::TypedAllocator<ast::Exp<raw_ptr>> typedAllocator(allocator);
+  arena::LinkedAllocator allocator(1 << 28);
+  arena::Typed<ast::Exp<raw_ptr>, decltype(allocator)> expAlloc(allocator);
 
   llvm::InitializeNativeTarget();
   llvm::InitializeNativeTargetAsmPrinter();
@@ -36,8 +34,7 @@ int main() {
   std::unique_ptr<llvm::orc::KaleidoscopeJIT> jit =
       ExitOnErr(llvm::orc::KaleidoscopeJIT::Create());
   Lexer lexer(std::cin);
-  Parser<raw_ptr, arena::TypedAllocator<ast::Exp<raw_ptr>>> parser(
-      typedAllocator, lexer, defaultInfixBp);
+  Parser<raw_ptr, decltype(expAlloc)> parser(expAlloc, lexer, defaultInfixBp);
   while (true) {
     allocator.reset();
     // If a peek token is already buffered, consume it.

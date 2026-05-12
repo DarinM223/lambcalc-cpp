@@ -26,6 +26,7 @@ file(
     GLOB_RECURSE SOURCES
     src/ast.cpp
     src/anf.cpp
+    src/anf_computed_goto.cpp
     src/visitor.cpp
     src/convert.cpp
     src/hoist.cpp

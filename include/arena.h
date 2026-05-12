@@ -3,7 +3,9 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <memory>
 #include <new>
+#include <vector>
 
 namespace lambcalc {
 namespace arena {
@@ -35,25 +37,55 @@ public:
   void reset() { begin_ = orig_; }
 };
 
-template <typename T> class TypedAllocator {
+class LinkedAllocator {
+  std::vector<char> buf_;
+  Allocator allocator_;
+  std::unique_ptr<LinkedAllocator> next_;
+
+public:
+  explicit LinkedAllocator(size_t size)
+      : buf_(size), allocator_(buf_.data(), buf_.data() + size),
+        next_(nullptr) {}
+
+  template <typename T> T *allocate(ptrdiff_t count = 1) {
+    try {
+      return allocator_.allocate<T>(count);
+    } catch (std::bad_alloc const &) {
+      if (next_ == nullptr) {
+        next_ = std::make_unique<LinkedAllocator>(buf_.capacity());
+      }
+      return next_->allocate<T>(count);
+    }
+  }
+
+  void reset() {
+    LinkedAllocator *ptr = next_.get();
+    while (ptr != nullptr) {
+      ptr->allocator_.reset();
+      ptr = ptr->next_.get();
+    }
+  }
+};
+
+template <typename T, typename Allocator> class Typed {
   Allocator &allocator_;
 
 public:
   using value_type = T;
-  explicit TypedAllocator(Allocator &allocator) : allocator_(allocator) {}
+  explicit Typed(Allocator &allocator) : allocator_(allocator) {}
   template <typename U>
-  explicit constexpr TypedAllocator(const TypedAllocator<U> &other) noexcept {
-    allocator_ = other.allocator_;
-  }
-  T *allocate(ptrdiff_t n = 1) { return allocator_.allocate<T>(n); }
+  explicit constexpr Typed(const Typed<Allocator, U> &other) noexcept
+      : allocator_(other.allocator_) {}
+  T *allocate(ptrdiff_t n = 1) { return allocator_.template allocate<T>(n); }
   void deallocate(T *, ptrdiff_t) noexcept {}
-  friend bool operator==(const TypedAllocator &a, const TypedAllocator &b) {
+  friend bool operator==(const Typed &a, const Typed &b) {
     return &a.allocator_ == &b.allocator_;
   }
-  friend bool operator!=(const TypedAllocator &a, const TypedAllocator &b) {
-    return !(a == b);
-  }
+  friend bool operator!=(const Typed &a, const Typed &b) { return !(a == b); }
 };
+
+template <typename T> using TypedAllocator = Typed<T, Allocator>;
+template <typename T> using TypedLinkedAllocator = Typed<T, LinkedAllocator>;
 
 } // namespace arena
 } // namespace lambcalc
