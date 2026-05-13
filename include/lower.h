@@ -18,8 +18,10 @@ extern std::unique_ptr<llvm::ModuleAnalysisManager> mam;
 extern std::unique_ptr<llvm::PassInstrumentationCallbacks> pic;
 extern std::unique_ptr<llvm::StandardInstrumentations> si;
 
-std::unique_ptr<llvm::Module> lower(std::vector<anf::Function> &&fns);
-std::unique_ptr<llvm::Module> lower(std::vector<anf::Function> &&fns,
+std::unique_ptr<llvm::Module> lower(const SymbolTable &table,
+                                    std::vector<anf::Function> &&fns);
+std::unique_ptr<llvm::Module> lower(const SymbolTable &table,
+                                    std::vector<anf::Function> &&fns,
                                     const llvm::DataLayout &layout);
 
 } // namespace lower

@@ -43,14 +43,16 @@ using ClosureConvertPipeline =
     WorklistVisitor<DefaultVisitor, WorklistTask<Exp>, std::stack>;
 class ClosureConvertVisitor : public ClosureConvertPipeline {
   int counter_;
+  SymbolTable &table_;
   std::unique_ptr<Exp> *parentLink_;
   Var fresh(std::string_view prefix) {
-    return prefix.data() + std::to_string(counter_++);
+    return table_.lookup(prefix.data() + std::to_string(counter_++));
   }
 
 public:
   using ClosureConvertPipeline::operator();
-  ClosureConvertVisitor() : counter_(0), parentLink_(nullptr) {}
+  ClosureConvertVisitor(SymbolTable &table)
+      : counter_(0), table_(table), parentLink_(nullptr) {}
   void setParent(std::unique_ptr<Exp> *parentLink) { parentLink_ = parentLink; }
   void operator()(FunExp &exp) {
     assert(parentLink_ != nullptr &&
@@ -112,8 +114,9 @@ std::set<Var> freeVars(Exp &root) {
   return freeVars;
 }
 
-std::unique_ptr<Exp> closureConvert(std::unique_ptr<Exp> &&start) {
-  ClosureConvertVisitor visitor;
+std::unique_ptr<Exp> closureConvert(SymbolTable &table,
+                                    std::unique_ptr<Exp> &&start) {
+  ClosureConvertVisitor visitor(table);
   auto &worklist = visitor.getWorklist();
   auto root = std::move(start);
   worklist.emplace(&root);

@@ -13,25 +13,26 @@ Token Lexer::getToken() {
     return Token::Arrow;
   }
   if (isalpha(lastChar_)) {
-    identifier_.assign(1, lastChar_);
-    while (isalnum((lastChar_ = in_.get()))) {
+    std::string identifier;
+    do {
       identifier_ += lastChar_;
-    }
-    if (identifier_ == "fn") {
+    } while (isalnum((lastChar_ = in_.get())));
+    if (identifier == "fn") {
       return Token::Fn;
     }
-    if (identifier_ == "=>") {
+    if (identifier == "=>") {
       return Token::Arrow;
     }
-    if (identifier_ == "if") {
+    if (identifier == "if") {
       return Token::If;
     }
-    if (identifier_ == "then") {
+    if (identifier == "then") {
       return Token::Then;
     }
-    if (identifier_ == "else") {
+    if (identifier == "else") {
       return Token::Else;
     }
+    identifier_ = table_.lookup(identifier);
     return Token::Identifier;
   }
   if (isdigit(lastChar_)) {

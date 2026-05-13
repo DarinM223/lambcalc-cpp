@@ -16,7 +16,7 @@ struct Value;
 struct Exp;
 
 using Cont = std::function<std::unique_ptr<Exp>(Value)>;
-using Var = std::string;
+using Var = Symbol;
 
 struct IntValue {
   int value;
@@ -32,7 +32,8 @@ struct GlobValue {
 
 struct Value : public std::variant<IntValue, VarValue, GlobValue> {
   using variant::variant;
-  friend std::ostream &operator<<(std::ostream &os, const Value &value);
+  friend void print(const SymbolTable &table, std::ostream &os,
+                    const Value &value);
 };
 
 struct HaltExp {
@@ -95,8 +96,8 @@ struct ProjExp {
 struct Exp : public std::variant<HaltExp, FunExp, JoinExp, JumpExp, AppExp,
                                  BopExp, IfExp, TupleExp, ProjExp> {
   using variant::variant;
-  friend std::ostream &operator<<(std::ostream &os, const Exp &exp);
-  std::string dump();
+  friend void print(const SymbolTable &table, std::ostream &os, const Exp &exp);
+  std::string dump(const SymbolTable &table);
   // Need to redefine the move constructor after defining the destructor :(
   Exp(Exp &&) = default;
   ~Exp();
@@ -104,9 +105,9 @@ struct Exp : public std::variant<HaltExp, FunExp, JoinExp, JumpExp, AppExp,
 
 void resetCounter();
 std::unique_ptr<Exp> make(Exp &&exp);
-std::unique_ptr<Exp> convert(ast::Exp<> &exp);
+std::unique_ptr<Exp> convert(SymbolTable &table, ast::Exp<> &exp);
 template <template <class> class Ptr>
-std::unique_ptr<Exp> convertDefunc(ast::Exp<Ptr> &root);
+std::unique_ptr<Exp> convertDefunc(SymbolTable &table, ast::Exp<Ptr> &root);
 
 } // namespace anf
 } // namespace lambcalc

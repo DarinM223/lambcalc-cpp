@@ -51,11 +51,13 @@ concept Task = requires(T task, Ptr<Exp<Ptr>> *parentLink) {
 };
 
 template <template <class> class Ptr> class PrintExpVisitor {
+  const SymbolTable &table_;
   std::ostream &out_;
 
 public:
-  explicit PrintExpVisitor(std::reference_wrapper<std::ostream> out)
-      : out_(out) {}
+  explicit PrintExpVisitor(const SymbolTable &table,
+                           std::reference_wrapper<std::ostream> out)
+      : table_(table), out_(out) {}
   void operator()(const IntExp &exp);
   void operator()(const VarExp &exp);
   void operator()(const LamExp<Ptr> &exp);
@@ -76,7 +78,7 @@ public:
   virtual void addWorklist(Ptr<Exp<Ptr>> *parentLink) {
     worklist.push(T(parentLink));
   }
-  virtual void addWorklist(const std::string &, Ptr<Exp<Ptr>> *parentLink) {
+  virtual void addWorklist(const Symbol &, Ptr<Exp<Ptr>> *parentLink) {
     addWorklist(parentLink);
   }
 
@@ -258,21 +260,25 @@ public:
 };
 
 class PrintValueVisitor {
+  const SymbolTable &table_;
   std::ostream &out_;
 
 public:
-  explicit PrintValueVisitor(std::ostream &out) : out_(out) {}
+  explicit PrintValueVisitor(const SymbolTable &table, std::ostream &out)
+      : table_(table), out_(out) {}
   void operator()(const IntValue &value);
   void operator()(const VarValue &value);
   void operator()(const GlobValue &value);
 };
 
 class PrintExpVisitor {
+  const SymbolTable &table_;
   std::ostream &out_;
 
 public:
-  explicit PrintExpVisitor(std::reference_wrapper<std::ostream> out)
-      : out_(out) {}
+  explicit PrintExpVisitor(const SymbolTable &table,
+                           std::reference_wrapper<std::ostream> out)
+      : table_(table), out_(out) {}
   void operator()(const HaltExp &exp);
   void operator()(const FunExp &exp);
   void operator()(const JoinExp &exp);

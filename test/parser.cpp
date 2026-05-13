@@ -1,4 +1,5 @@
 #include "parser.h"
+#include "symbol.h"
 #include <gtest/gtest.h>
 #include <sstream>
 
@@ -10,48 +11,52 @@ const std::unordered_map<ast::Bop, std::optional<std::pair<int, int>>>
                    {ast::Bop::Times, {{3, 4}}}};
 
 TEST(Parser, ParsesOperators) {
+  SymbolTable table;
   std::istringstream is(" (fn a => a + 1 + 2 * 3 * 4 + 5 ) ");
   std::allocator<ast::Exp<>> allocator;
-  Lexer lexer(is);
+  Lexer lexer(table, is);
   Parser parser(allocator, lexer, defaultInfixBp);
   auto exp = parser.parseExpression();
   std::string expected = "(fn a => (((a + 1) + ((2 * 3) * 4)) + 5))";
-  EXPECT_EQ(exp->dump(), expected);
+  EXPECT_EQ(exp->dump(table), expected);
 }
 
 TEST(Parser, ParsesApp) {
+  SymbolTable table;
   std::istringstream is("a b c + d e f");
   std::allocator<ast::Exp<>> allocator;
-  Lexer lexer(is);
+  Lexer lexer(table, is);
   Parser parser(allocator, lexer, defaultInfixBp);
   auto exp = parser.parseExpression();
   std::string expected = "(((a b) c) + ((d e) f))";
-  EXPECT_EQ(exp->dump(), expected);
+  EXPECT_EQ(exp->dump(table), expected);
 }
 
 TEST(Parser, ParseIfWithAppParens) {
+  SymbolTable table;
   std::istringstream is("if x then x * f (x - 1) else 1");
   std::allocator<ast::Exp<>> allocator;
-  Lexer lexer(is);
+  Lexer lexer(table, is);
   Parser parser(allocator, lexer, defaultInfixBp);
   auto exp = parser.parseExpression();
   std::string expected = "(if x then (x * (f (x - 1))) else 1)";
-  EXPECT_EQ(exp->dump(), expected);
+  EXPECT_EQ(exp->dump(table), expected);
 }
 
 TEST(Parser, ZCombinator) {
+  SymbolTable table;
   std::istringstream is(
       "(fn g => (fn x => g (fn v => x x v)) (fn x => g (fn v => x x v))) (fn f "
       "=> fn x => if x then (if x - 1 then x * f (x - 1) else 1) else 1) 5");
   std::allocator<ast::Exp<>> allocator;
-  Lexer lexer(is);
+  Lexer lexer(table, is);
   Parser parser(allocator, lexer, defaultInfixBp);
   auto exp = parser.parseExpression();
   std::string expected =
       "(((fn g => ((fn x => (g (fn v => ((x x) v)))) (fn x => (g (fn v => ((x "
       "x) v)))))) (fn f => (fn x => (if x then (if (x - 1) then (x * (f (x - "
       "1))) else 1) else 1)))) 5)";
-  EXPECT_EQ(exp->dump(), expected);
+  EXPECT_EQ(exp->dump(table), expected);
 }
 
 } // namespace lambcalc

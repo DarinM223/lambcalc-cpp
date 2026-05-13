@@ -17,33 +17,15 @@ std::string binOpString(ast::Bop bop) {
   std::unreachable();
 }
 
-template <typename T>
-void print_vector(std::ostream &os, const std::vector<T> &vec) {
-  os << "[";
-  for (auto it = vec.begin(); it != vec.end(); ++it) {
-    os << *it;
-    if (it + 1 != vec.end()) {
-      os << ", ";
-    }
-  }
-  os << "]";
-}
-
-template <typename T>
-void print_optional(std::ostream &os, std::optional<T> opt) {
-  if (opt) {
-    os << "<" << *opt << ">";
-  } else {
-    os << "<>";
-  }
+void print(const SymbolTable &table, std::ostream &os, Symbol sym) {
+  os << table.lookup(sym);
 }
 
 namespace ast {
 
 template <template <class> class Ptr>
-std::ostream &operator<<(std::ostream &os, const Exp<Ptr> &exp) {
-  std::visit(PrintExpVisitor<Ptr>(os), exp);
-  return os;
+void print(const SymbolTable &table, std::ostream &os, const Exp<Ptr> &exp) {
+  std::visit(PrintExpVisitor<Ptr>(table, os), exp);
 }
 
 template <template <class> class Ptr>
@@ -52,25 +34,39 @@ void PrintExpVisitor<Ptr>::operator()(const IntExp &exp) {
 }
 template <template <class> class Ptr>
 void PrintExpVisitor<Ptr>::operator()(const VarExp &exp) {
-  out_ << exp.name;
+  out_ << table_.lookup(exp.name);
 }
 template <template <class> class Ptr>
 void PrintExpVisitor<Ptr>::operator()(const LamExp<Ptr> &exp) {
-  out_ << "(fn " << exp.param << " => " << *exp.body << ")";
+  out_ << "(fn " << table_.lookup(exp.param) << " => ";
+  print(table_, out_, *exp.body);
+  out_ << ")";
 }
 template <template <class> class Ptr>
 void PrintExpVisitor<Ptr>::operator()(const AppExp<Ptr> &exp) {
-  out_ << "(" << *exp.fn << " " << *exp.arg << ")";
+  out_ << "(";
+  print(table_, out_, *exp.fn);
+  out_ << " ";
+  print(table_, out_, *exp.arg);
+  out_ << ")";
 }
 template <template <class> class Ptr>
 void PrintExpVisitor<Ptr>::operator()(const BopExp<Ptr> &exp) {
-  out_ << "(" << *exp.arg1 << " " << binOpString(exp.bop) << " " << *exp.arg2
-       << ")";
+  out_ << "(";
+  print(table_, out_, *exp.arg1);
+  out_ << " " << binOpString(exp.bop) << " ";
+  print(table_, out_, *exp.arg2);
+  out_ << ")";
 }
 template <template <class> class Ptr>
 void PrintExpVisitor<Ptr>::operator()(const IfExp<Ptr> &exp) {
-  out_ << "(if " << *exp.cond << " then " << *exp.then << " else " << *exp.els
-       << ")";
+  out_ << "(if ";
+  print(table_, out_, *exp.cond);
+  out_ << " then ";
+  print(table_, out_, *exp.then);
+  out_ << " else ";
+  print(table_, out_, *exp.els);
+  out_ << ")";
 }
 
 template class PrintExpVisitor<std::unique_ptr>;
@@ -80,72 +76,123 @@ template class PrintExpVisitor<raw_ptr>;
 
 namespace anf {
 
+template <typename T>
+void print_vector(const SymbolTable &table, std::ostream &os,
+                  const std::vector<T> &vec) {
+  os << "[";
+  for (auto it = vec.begin(); it != vec.end(); ++it) {
+    print(table, os, *it);
+    if (it + 1 != vec.end()) {
+      os << ", ";
+    }
+  }
+  os << "]";
+}
+
+template <typename T>
+void print_optional(const SymbolTable &table, std::ostream &os,
+                    std::optional<T> opt) {
+  if (opt) {
+    os << "<";
+    print(table, os, *opt);
+    os << ">";
+  } else {
+    os << "<>";
+  }
+}
+
 void PrintValueVisitor::operator()(const IntValue &value) {
   out_ << value.value;
 }
-void PrintValueVisitor::operator()(const VarValue &value) { out_ << value.var; }
+void PrintValueVisitor::operator()(const VarValue &value) {
+  out_ << table_.lookup(value.var);
+}
 void PrintValueVisitor::operator()(const GlobValue &value) {
-  out_ << value.glob;
+  out_ << table_.lookup(value.glob);
 }
 
-std::ostream &operator<<(std::ostream &os, const Value &value) {
-  std::visit(PrintValueVisitor(os), value);
-  return os;
+void print(const SymbolTable &table, std::ostream &os, const Value &value) {
+  std::visit(PrintValueVisitor(table, os), value);
+}
+
+void print(const SymbolTable &table, std::ostream &os, const Exp &exp) {
+  std::visit(PrintExpVisitor(table, os), exp);
 }
 
 void PrintExpVisitor::operator()(const HaltExp &exp) {
-  out_ << "HaltExp { " << exp.value << " }";
+  out_ << "HaltExp { ";
+  print(table_, out_, exp.value);
+  out_ << " }";
 }
 
 void PrintExpVisitor::operator()(const FunExp &exp) {
   out_ << "FunExp { " << exp.name << ", ";
-  print_vector(out_, exp.params);
-  out_ << ", " << *exp.body << ", " << *exp.rest << " }";
+  print_vector(table_, out_, exp.params);
+  out_ << ", ";
+  print(table_, out_, *exp.body);
+  out_ << ", ";
+  print(table_, out_, *exp.rest);
+  out_ << " }";
 }
 
 void PrintExpVisitor::operator()(const JoinExp &exp) {
   out_ << "JoinExp { " << exp.name << ", ";
-  print_optional(out_, exp.slot);
-  out_ << ", " << *exp.body << ", " << *exp.rest << " }";
+  print_optional(table_, out_, exp.slot);
+  out_ << ", ";
+  print(table_, out_, *exp.body);
+  out_ << ", ";
+  print(table_, out_, *exp.rest);
+  out_ << " }";
 }
 
 void PrintExpVisitor::operator()(const JumpExp &exp) {
   out_ << "JumpExp { " << exp.joinName << ", ";
-  print_optional(out_, exp.slotValue);
+  print_optional(table_, out_, exp.slotValue);
   out_ << " }";
 }
 
 void PrintExpVisitor::operator()(const AppExp &exp) {
   out_ << "AppExp { " << exp.name << ", " << exp.funName << ", ";
-  print_vector(out_, exp.paramValues);
-  out_ << ", " << *exp.rest << " }";
+  print_vector(table_, out_, exp.paramValues);
+  out_ << ", ";
+  print(table_, out_, *exp.rest);
+  out_ << " }";
 }
 
 void PrintExpVisitor::operator()(const BopExp &exp) {
   std::string bop = binOpString(exp.bop);
-  out_ << "BopExp { " << exp.name << ", " << bop << ", " << exp.param1 << ", "
-       << exp.param2 << ", " << *exp.rest << " }";
+  out_ << "BopExp { " << exp.name << ", " << bop << ", ";
+  print(table_, out_, exp.param1);
+  out_ << ", ";
+  print(table_, out_, exp.param2);
+  out_ << ", ";
+  print(table_, out_, *exp.rest);
+  out_ << " }";
 }
 
 void PrintExpVisitor::operator()(const TupleExp &exp) {
-  out_ << "TupleExp { " << exp.name << ", ";
-  print_vector(out_, exp.values);
-  out_ << ", " << *exp.rest << " }";
+  out_ << "TupleExp { " << table_.lookup(exp.name) << ", ";
+  print_vector(table_, out_, exp.values);
+  out_ << ", ";
+  print(table_, out_, *exp.rest);
+  out_ << " }";
 }
 
 void PrintExpVisitor::operator()(const ProjExp &exp) {
-  out_ << "ProjExp { " << exp.name << ", " << exp.tuple << ", " << exp.index
-       << ", " << *exp.rest << " }";
+  out_ << "ProjExp { " << table_.lookup(exp.name) << ", "
+       << table_.lookup(exp.tuple) << ", " << exp.index << ", ";
+  print(table_, out_, *exp.rest);
+  out_ << " }";
 }
 
 void PrintExpVisitor::operator()(const IfExp &exp) {
-  out_ << "IfExp { " << exp.cond << ", " << *exp.thenBranch << ", "
-       << *exp.elseBranch << " }";
-}
-
-std::ostream &operator<<(std::ostream &os, const Exp &exp) {
-  std::visit(PrintExpVisitor(os), exp);
-  return os;
+  out_ << "IfExp { ";
+  print(table_, out_, exp.cond);
+  out_ << ", ";
+  print(table_, out_, *exp.thenBranch);
+  out_ << ", ";
+  print(table_, out_, *exp.elseBranch);
+  out_ << " }";
 }
 
 } // namespace anf

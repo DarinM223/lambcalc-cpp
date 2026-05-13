@@ -13,19 +13,20 @@ using AlphaRenamePipeline =
 template <template <class> class Ptr>
 class AlphaRenameVisitor : public AlphaRenamePipeline<Ptr> {
   int counter_;
-  std::unordered_map<std::string, std::string> rename_;
+  SymbolTable &table_;
+  std::unordered_map<Symbol, Symbol> rename_;
 
-  std::string fresh(std::string_view name) {
-    return name.data() + std::to_string(counter_++);
+  Symbol fresh(std::string_view name) {
+    return table_.lookup(name.data() + std::to_string(counter_++));
   }
 
 public:
-  AlphaRenameVisitor() : counter_(0) {}
+  AlphaRenameVisitor(SymbolTable &table) : counter_(0), table_(table) {}
   using AlphaRenamePipeline<Ptr>::operator();
   using AlphaRenamePipeline<Ptr>::getWorklist;
   void operator()(LamExp<Ptr> &exp) {
-    auto renamed = fresh(exp.param);
-    std::optional<std::string> oldRenameParam =
+    auto renamed = fresh(table_.lookup(exp.param));
+    std::optional<Symbol> oldRenameParam =
         rename_.contains(exp.param) ? std::optional{rename_[exp.param]}
                                     : std::nullopt;
     rename_[exp.param] = renamed;
@@ -46,13 +47,14 @@ public:
     if (rename_.contains(exp.name)) {
       exp.name = rename_[exp.name];
     } else {
-      throw NotInScopeException(exp.name);
+      throw NotInScopeException(table_.lookup(exp.name));
     }
   }
 };
 
-template <template <class> class Ptr> void rename(ast::Exp<Ptr> &exp) {
-  AlphaRenameVisitor<Ptr> visitor;
+template <template <class> class Ptr>
+void rename(SymbolTable &table, ast::Exp<Ptr> &exp) {
+  AlphaRenameVisitor<Ptr> visitor(table);
   auto &worklist = visitor.getWorklist();
   std::visit(visitor, exp);
   while (!worklist.empty()) {
@@ -67,8 +69,8 @@ template <template <class> class Ptr> void rename(ast::Exp<Ptr> &exp) {
   }
 }
 
-template void rename(ast::Exp<std::unique_ptr> &);
-template void rename(ast::Exp<raw_ptr> &);
+template void rename(SymbolTable &, ast::Exp<std::unique_ptr> &);
+template void rename(SymbolTable &, ast::Exp<raw_ptr> &);
 
 } // namespace ast
 } // namespace lambcalc
