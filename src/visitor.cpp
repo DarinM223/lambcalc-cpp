@@ -126,7 +126,7 @@ void PrintExpVisitor::operator()(const HaltExp &exp) {
 }
 
 void PrintExpVisitor::operator()(const FunExp &exp) {
-  out_ << "FunExp { " << exp.name << ", ";
+  out_ << "FunExp { " << table_.lookup(exp.name) << ", ";
   print_vector(table_, out_, exp.params);
   out_ << ", ";
   print(table_, out_, *exp.body);
@@ -136,7 +136,7 @@ void PrintExpVisitor::operator()(const FunExp &exp) {
 }
 
 void PrintExpVisitor::operator()(const JoinExp &exp) {
-  out_ << "JoinExp { " << exp.name << ", ";
+  out_ << "JoinExp { " << table_.lookup(exp.name) << ", ";
   print_optional(table_, out_, exp.slot);
   out_ << ", ";
   print(table_, out_, *exp.body);
@@ -146,13 +146,14 @@ void PrintExpVisitor::operator()(const JoinExp &exp) {
 }
 
 void PrintExpVisitor::operator()(const JumpExp &exp) {
-  out_ << "JumpExp { " << exp.joinName << ", ";
+  out_ << "JumpExp { " << table_.lookup(exp.joinName) << ", ";
   print_optional(table_, out_, exp.slotValue);
   out_ << " }";
 }
 
 void PrintExpVisitor::operator()(const AppExp &exp) {
-  out_ << "AppExp { " << exp.name << ", " << exp.funName << ", ";
+  out_ << "AppExp { " << table_.lookup(exp.name) << ", "
+       << table_.lookup(exp.funName) << ", ";
   print_vector(table_, out_, exp.paramValues);
   out_ << ", ";
   print(table_, out_, *exp.rest);
@@ -161,7 +162,7 @@ void PrintExpVisitor::operator()(const AppExp &exp) {
 
 void PrintExpVisitor::operator()(const BopExp &exp) {
   std::string bop = binOpString(exp.bop);
-  out_ << "BopExp { " << exp.name << ", " << bop << ", ";
+  out_ << "BopExp { " << table_.lookup(exp.name) << ", " << bop << ", ";
   print(table_, out_, exp.param1);
   out_ << ", ";
   print(table_, out_, exp.param2);
