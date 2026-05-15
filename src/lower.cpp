@@ -157,8 +157,8 @@ public:
     auto tuplePtr = builder_.CreateIntToPtr(tupleInt, builder_.getPtrTy());
     auto gep = builder_.CreateGEP(builder_.getInt64Ty(), tuplePtr,
                                   {builder_.getInt64(exp.index)});
-    namedValues_[exp.name] =
-        builder_.CreateLoad(builder_.getInt64Ty(), gep, exp.name);
+    namedValues_[exp.name] = builder_.CreateLoad(builder_.getInt64Ty(), gep,
+                                                 table_.lookup(exp.name));
     return LLVMLowerPipeline::operator()(exp);
   }
   void operator()(IfExp &exp) { return LLVMLowerPipeline::operator()(exp); }
@@ -278,8 +278,8 @@ void lowerModule(const SymbolTable &table, std::vector<Function> &&fns,
       builder->SetInsertPoint(loweredBlock);
       if (block.slot) {
         auto slot = spillSlots[block.name];
-        namedValues[*block.slot] =
-            builder->CreateLoad(builder->getInt64Ty(), slot, *block.slot);
+        namedValues[*block.slot] = builder->CreateLoad(
+            builder->getInt64Ty(), slot, table.lookup(*block.slot));
       }
       lowerBlock(visitor, block);
     }

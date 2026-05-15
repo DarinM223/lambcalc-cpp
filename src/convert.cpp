@@ -2,6 +2,7 @@
 #include "utils.h"
 #include "visitor.h"
 #include <cassert>
+#include <functional>
 #include <stack>
 
 namespace lambcalc {
@@ -10,11 +11,12 @@ using namespace anf;
 
 using FreeVarsPipeline = WorklistVisitor<ExpValueVisitor<DefaultVisitor>,
                                          WorklistTask<Exp>, std::stack>;
-class FreeVarsVisitor : public FreeVarsPipeline {
-  std::set<Var> &freeVars_;
+template <typename Comparator> class FreeVarsVisitor : public FreeVarsPipeline {
+  std::set<Var, Comparator> &freeVars_;
 
 public:
-  explicit FreeVarsVisitor(std::set<Var> &freeVars) : freeVars_(freeVars) {}
+  explicit FreeVarsVisitor(std::set<Var, Comparator> &freeVars)
+      : freeVars_(freeVars) {}
   using FreeVarsPipeline::operator();
   using FreeVarsPipeline::addWorklist;
 
@@ -39,6 +41,25 @@ public:
   }
 };
 
+template <typename Comparator = std::less<Var>>
+std::set<Var, Comparator> freeVars(Comparator cmp, Exp &root) {
+  std::set<Var, Comparator> freeVars(cmp);
+  FreeVarsVisitor visitor(freeVars);
+  auto &worklist = visitor.getWorklist();
+  std::visit(visitor, root);
+  while (!worklist.empty()) {
+    auto task = std::move(worklist.top());
+    worklist.pop();
+    std::visit(overloaded{[&](const NodeTask<Exp> &n) {
+                            Exp &exp = std::get<1>(n);
+                            std::visit(visitor, exp);
+                          },
+                          [](FnTask &f) { std::move(f)(); }},
+               task);
+  }
+  return freeVars;
+}
+
 using ClosureConvertPipeline =
     WorklistVisitor<DefaultVisitor, WorklistTask<Exp>, std::stack>;
 class ClosureConvertVisitor : public ClosureConvertPipeline {
@@ -57,7 +78,10 @@ public:
   void operator()(FunExp &exp) {
     assert(parentLink_ != nullptr &&
            "Expected FunExp to have a unique_ptr link");
-    auto freeVariables = freeVars(**parentLink_);
+    auto cmp = [&table = table_](Var a, Var b) {
+      return table.lookup(a) < table.lookup(b);
+    };
+    auto freeVariables = freeVars(cmp, **parentLink_);
     auto closureParam = fresh("closure");
     exp.params.insert(exp.params.begin(), closureParam);
     auto body = std::move(exp.body);
@@ -96,23 +120,7 @@ public:
   }
 };
 
-std::set<Var> freeVars(Exp &root) {
-  std::set<Var> freeVars;
-  FreeVarsVisitor visitor(freeVars);
-  auto &worklist = visitor.getWorklist();
-  std::visit(visitor, root);
-  while (!worklist.empty()) {
-    auto task = std::move(worklist.top());
-    worklist.pop();
-    std::visit(overloaded{[&](const NodeTask<Exp> &n) {
-                            Exp &exp = std::get<1>(n);
-                            std::visit(visitor, exp);
-                          },
-                          [](FnTask &f) { std::move(f)(); }},
-               task);
-  }
-  return freeVars;
-}
+std::set<Var> freeVars(Exp &root) { return freeVars(std::less<Var>(), root); }
 
 std::unique_ptr<Exp> closureConvert(SymbolTable &table,
                                     std::unique_ptr<Exp> &&start) {
