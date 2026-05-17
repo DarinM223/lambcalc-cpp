@@ -46,7 +46,7 @@ struct K_Bop1 {
 };
 
 struct K_Bop2 {
-  Value y;
+  Value x;
   ast::Bop bop;
   K *k;
 };
@@ -185,10 +185,10 @@ std::unique_ptr<Exp> convertDefunc(SymbolTable &table,
     value = VarValue{f};
     K2 *newK2 = allocator.allocate<K2>();
     newK2->tag = K2_LAM2;
-    newK2->lam2.k2 = frame.k2;
     newK2->lam2.f = f;
     newK2->lam2.v = frame.v;
     newK2->lam2.body = &*k2_exp;
+    newK2->lam2.k2 = frame.k2;
     k2 = newK2;
     goto *apply_k_table[k->tag];
   }
@@ -210,18 +210,166 @@ std::unique_ptr<Exp> convertDefunc(SymbolTable &table,
     k2 = frame.k2;
     goto *apply_k2_table[k2->tag];
   }
-  apply_k2_bop1:
-  apply_k2_if1:
-  apply_k2_if2:
-  apply_k2_if3:
+  apply_k2_bop1: {
+    auto frame = k2->bop1;
+    k2_exp = make(BopExp{.name = frame.r,
+                         .bop = frame.bop,
+                         .param1 = std::move(frame.x),
+                         .param2 = std::move(frame.y),
+                         .rest = std::move(k2_exp)});
+    k2 = frame.k2;
+    goto *apply_k2_table[k2->tag];
+  }
+  apply_k2_if1: {
+    auto frame = k2->if1;
+    go_exp = frame.t;
+
+    K2 *newK2 = allocator.allocate<K2>();
+    newK2->tag = K2_IF2;
+    newK2->if2.f = frame.f;
+    newK2->if2.j = frame.j;
+    newK2->if2.p = frame.p;
+    newK2->if2.c = std::move(frame.c);
+    {
+      std::unique_ptr<Exp> rest = std::move(k2_exp);
+      newK2->if2.rest = rest.release();
+    }
+    newK2->if2.k2 = frame.k2;
+    k2 = newK2;
+
+    k = allocator.allocate<K>();
+    k->tag = K_IF2;
+    k->if2.j = frame.j;
+
+    goto *go_table[go_exp->index()];
+  }
+  apply_k2_if2: {
+    auto frame = k2->if2;
+    go_exp = frame.f;
+
+    K2 *newK2 = allocator.allocate<K2>();
+    newK2->tag = K2_IF3;
+    {
+      std::unique_ptr<Exp> t = std::move(k2_exp);
+      newK2->if3.t = t.release();
+    }
+    newK2->if3.j = frame.j;
+    newK2->if3.p = frame.p;
+    newK2->if3.c = std::move(frame.c);
+    newK2->if3.rest = frame.rest;
+    newK2->if3.k2 = frame.k2;
+    k2 = newK2;
+
+    k = allocator.allocate<K>();
+    k->tag = K_IF2;
+    k->if2.j = frame.j;
+
+    goto *go_table[go_exp->index()];
+  }
+  apply_k2_if3: {
+    auto frame = k2->if3;
+    k2_exp = make(
+        JoinExp{.name = frame.j,
+                .slot = {frame.p},
+                .body = std::unique_ptr<Exp>(frame.rest),
+                .rest = make(IfExp{.cond = std::move(frame.c),
+                                   .thenBranch = std::unique_ptr<Exp>(frame.t),
+                                   .elseBranch = std::move(k2_exp)})});
+    k2 = frame.k2;
+    goto *apply_k2_table[k2->tag];
+  }
 
   apply_k_lam1:
-  apply_k_app1:
-  apply_k_app2:
-  apply_k_bop1:
-  apply_k_bop2:
-  apply_k_if1:
-  apply_k_if2:
+    k2_exp = make(HaltExp{value});
+    goto *apply_k2_table[k2->tag];
+  apply_k_app1: {
+    auto frame = k->app1;
+    go_exp = frame.x;
+
+    K *newK = allocator.allocate<K>();
+    newK->tag = K_APP2;
+    newK->app2.f = std::move(value);
+    newK->app2.k = frame.k;
+    k = newK;
+
+    goto *go_table[go_exp->index()];
+  }
+  apply_k_app2: {
+    auto frame = k->app2;
+
+    std::visit(overloaded{[&](VarValue &f) {
+                            auto r = fresh(table);
+                            K2 *newK2 = allocator.allocate<K2>();
+                            newK2->tag = K2_APP1;
+                            newK2->app1.r = r;
+                            newK2->app1.f = f.var;
+                            newK2->app1.x = std::move(value);
+                            newK2->app1.k2 = k2;
+                            k2 = newK2;
+                            value = VarValue{r};
+                          },
+                          [](auto &) {
+                            throw std::runtime_error("must apply named value");
+                          }},
+               frame.f);
+    k = frame.k;
+    goto *apply_k_table[k->tag];
+  }
+  apply_k_bop1: {
+    auto frame = k->bop1;
+    go_exp = frame.y;
+
+    K *newK = allocator.allocate<K>();
+    newK->tag = K_BOP2;
+    newK->bop2.x = std::move(value);
+    newK->bop2.bop = frame.bop;
+    newK->bop2.k = frame.k;
+    k = newK;
+
+    goto *go_table[go_exp->index()];
+  }
+  apply_k_bop2: {
+    auto frame = k->bop2;
+    auto r = fresh(table);
+
+    K2 *newK2 = allocator.allocate<K2>();
+    newK2->tag = K2_BOP1;
+    newK2->bop1.r = r;
+    newK2->bop1.bop = frame.bop;
+    newK2->bop1.x = std::move(frame.x);
+    newK2->bop1.y = std::move(value);
+    newK2->bop1.k2 = k2;
+    k2 = newK2;
+
+    value = VarValue{r};
+    k = frame.k;
+    goto *apply_k_table[k->tag];
+  }
+  apply_k_if1: {
+    auto frame = k->if1;
+    auto j = fresh(table);
+    auto p = fresh(table);
+
+    K2 *newK2 = allocator.allocate<K2>();
+    newK2->tag = K2_IF1;
+    newK2->if1.t = frame.t;
+    newK2->if1.f = frame.f;
+    newK2->if1.j = j;
+    newK2->if1.p = p;
+    newK2->if1.c = std::move(value);
+    newK2->if1.k2 = k2;
+    k2 = newK2;
+
+    value = VarValue{p};
+    k = frame.k;
+    goto *apply_k_table[k->tag];
+  }
+  apply_k_if2: {
+    auto frame = k->if2;
+    k2_exp =
+        make(JumpExp{.joinName = frame.j, .slotValue = {std::move(value)}});
+    goto *apply_k2_table[k2->tag];
+  }
   go_int_exp: {
     auto exp = getVariant<ast::IntExp>(go_exp);
     value = IntValue{exp->value};
@@ -242,8 +390,8 @@ std::unique_ptr<Exp> convertDefunc(SymbolTable &table,
     K2 *newK2 = allocator.allocate<K2>();
     newK2->tag = K2_LAM1;
     newK2->lam1.k = oldK;
-    newK2->lam1.k2 = k2;
     newK2->lam1.v = exp->param;
+    newK2->lam1.k2 = k2;
     k2 = newK2;
     goto *go_table[go_exp->index()];
   }
@@ -252,8 +400,8 @@ std::unique_ptr<Exp> convertDefunc(SymbolTable &table,
     go_exp = exp->fn;
     K *newK = allocator.allocate<K>();
     newK->tag = K_APP1;
-    newK->app1.k = k;
     newK->app1.x = exp->arg;
+    newK->app1.k = k;
     k = newK;
     goto *go_table[go_exp->index()];
   }
@@ -262,9 +410,9 @@ std::unique_ptr<Exp> convertDefunc(SymbolTable &table,
     go_exp = exp->arg1;
     K *newK = allocator.allocate<K>();
     newK->tag = K_BOP1;
-    newK->bop1.k = k;
     newK->bop1.y = exp->arg2;
     newK->bop1.bop = exp->bop;
+    newK->bop1.k = k;
     k = newK;
     goto *go_table[go_exp->index()];
   }
@@ -273,9 +421,9 @@ std::unique_ptr<Exp> convertDefunc(SymbolTable &table,
     go_exp = exp->cond;
     K *newK = allocator.allocate<K>();
     k->tag = K_IF1;
-    k->if1.k = k;
     k->if1.t = exp->then;
     k->if1.f = exp->els;
+    k->if1.k = k;
     k = newK;
     goto *go_table[go_exp->index()];
   }
