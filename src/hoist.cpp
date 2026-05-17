@@ -10,17 +10,19 @@ using HoistPipeline =
     WorklistVisitor<DefaultVisitor, WorklistTask<Exp>, std::stack>;
 class HoistVisitor : public HoistPipeline {
   int counter_;
+  SymbolTable &table_;
   std::vector<Join> currentJoins_;
   std::vector<Function> collected_;
   std::unique_ptr<Exp> *parentLink_;
 
   Var fresh(std::string_view prefix) {
-    return prefix.data() + std::to_string(counter_++);
+    return table_.lookup(prefix.data() + std::to_string(counter_++));
   }
 
 public:
   using HoistPipeline::operator();
-  HoistVisitor() : counter_(0), parentLink_(nullptr) {}
+  HoistVisitor(SymbolTable &table)
+      : counter_(0), table_(table), parentLink_(nullptr) {}
   void setParentLink(std::unique_ptr<Exp> *parentLink) {
     parentLink_ = parentLink;
   }
@@ -80,10 +82,11 @@ public:
   }
 };
 
-std::vector<Function> hoist(std::unique_ptr<anf::Exp> &&start) {
-  HoistVisitor visitor;
-  auto root =
-      make(FunExp{"main", {}, std::move(start), make(HaltExp{IntValue{0}})});
+std::vector<Function> hoist(SymbolTable &table,
+                            std::unique_ptr<anf::Exp> &&start) {
+  HoistVisitor visitor(table);
+  auto root = make(FunExp{
+      table.lookup("main"), {}, std::move(start), make(HaltExp{IntValue{0}})});
   auto &worklist = visitor.getWorklist();
   worklist.emplace(&root);
   while (!worklist.empty()) {

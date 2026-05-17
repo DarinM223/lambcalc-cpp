@@ -5,8 +5,9 @@
 namespace lambcalc {
 
 TEST(Lexer, Tokens) {
+  SymbolTable table;
   std::istringstream is(" (fn a => a + 1 ) ( if 1  then  2 else  3)  ");
-  Lexer lexer(is);
+  Lexer lexer(table, is);
   std::vector<std::string> tokens;
   Token token;
   while ((token = lexer.getToken()) != Token::Eof) {
@@ -15,7 +16,7 @@ TEST(Lexer, Tokens) {
       tokens.push_back(std::to_string(lexer.getNumber()));
       break;
     case Token::Identifier:
-      tokens.emplace_back(lexer.getIdentifier());
+      tokens.emplace_back(table.lookup(lexer.getIdentifier()));
       break;
     case Token::Fn:
       tokens.emplace_back("fn");

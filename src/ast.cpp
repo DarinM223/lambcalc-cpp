@@ -13,9 +13,10 @@ std::unique_ptr<Exp<>> make(Exp<> &&exp) {
   return std::make_unique<Exp<>>(std::move(exp));
 }
 
-template <template <class> class Ptr> std::string Exp<Ptr>::dump() {
+template <template <class> class Ptr>
+std::string Exp<Ptr>::dump(const SymbolTable &table) {
   std::ostringstream out;
-  out << *this;
+  print(table, out, *this);
   return out.str();
 }
 

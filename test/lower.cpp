@@ -9,10 +9,12 @@ using namespace anf;
 using namespace llvm;
 
 TEST(Lower, Simple) {
-  auto exp = make(BopExp{"c", ast::Bop::Plus, IntValue{1}, IntValue{2},
-                         make(HaltExp{VarValue{"c"}})});
-  auto hoisted = anf::hoist(std::move(exp));
-  auto lowered = lower::lower(std::move(hoisted));
+  SymbolTable table;
+  auto exp =
+      make(BopExp{table.lookup("c"), ast::Bop::Plus, IntValue{1}, IntValue{2},
+                  make(HaltExp{VarValue{table.lookup("c")}})});
+  auto hoisted = anf::hoist(table, std::move(exp));
+  auto lowered = lower::lower(table, std::move(hoisted));
   std::ostringstream out;
   llvm::raw_os_ostream rout(out);
   lowered->print(rout, nullptr);
@@ -26,26 +28,34 @@ TEST(Lower, Simple) {
 }
 
 TEST(Lower, Functions) {
+  SymbolTable table;
   auto exp = make(FunExp{
-      "f1",
-      {"a"},
+      table.lookup("f1"),
+      {table.lookup("a")},
       make(JoinExp{
-          "j1",
+          table.lookup("j1"),
           {},
           make(FunExp{
-              "f2",
-              {"b"},
-              make(JoinExp{"j2",
-                           {"c"},
-                           make(HaltExp{VarValue{"c"}}),
-                           make(JumpExp{"j2", {IntValue{0}}})}),
-              make(AppExp{
-                  "y", "f2", {IntValue{1}}, make(HaltExp{VarValue{"y"}})})}),
-          make(JoinExp{
-              "j3", {}, make(JumpExp{"j1", {}}), make(JumpExp{"j3", {}})})}),
-      make(AppExp{"x", "f1", {IntValue{0}}, make(HaltExp{VarValue{"x"}})})});
-  auto hoisted = anf::hoist(std::move(exp));
-  auto lowered = lower::lower(std::move(hoisted));
+              table.lookup("f2"),
+              {table.lookup("b")},
+              make(JoinExp{table.lookup("j2"),
+                           {table.lookup("c")},
+                           make(HaltExp{VarValue{table.lookup("c")}}),
+                           make(JumpExp{table.lookup("j2"), {IntValue{0}}})}),
+              make(AppExp{table.lookup("y"),
+                          table.lookup("f2"),
+                          {IntValue{1}},
+                          make(HaltExp{VarValue{table.lookup("y")}})})}),
+          make(JoinExp{table.lookup("j3"),
+                       {},
+                       make(JumpExp{table.lookup("j1"), {}}),
+                       make(JumpExp{table.lookup("j3"), {}})})}),
+      make(AppExp{table.lookup("x"),
+                  table.lookup("f1"),
+                  {IntValue{0}},
+                  make(HaltExp{VarValue{table.lookup("x")}})})});
+  auto hoisted = anf::hoist(table, std::move(exp));
+  auto lowered = lower::lower(table, std::move(hoisted));
   std::ostringstream out;
   llvm::raw_os_ostream rout(out);
   lowered->print(rout, nullptr);
@@ -85,28 +95,31 @@ TEST(Lower, Functions) {
 }
 
 TEST(Lower, IfElse) {
+  SymbolTable table;
   auto exp = make(FunExp{
-      "f",
-      {"closure", "x"},
+      table.lookup("f"),
+      {table.lookup("closure"), table.lookup("x")},
       make(BopExp{
-          "a", ast::Bop::Plus, IntValue{1}, IntValue{2},
+          table.lookup("a"), ast::Bop::Plus, IntValue{1}, IntValue{2},
           make(IfExp{
-              VarValue{"a"},
-              make(IfExp{
-                  VarValue{"x"},
-                  make(BopExp{"c", ast::Bop::Plus, VarValue{"x"}, VarValue{"a"},
-                              make(AppExp{"d",
-                                          "f",
-                                          {VarValue{"c"}},
-                                          make(HaltExp{VarValue{"d"}})})}),
-                  make(HaltExp{IntValue{5}})}),
-              make(HaltExp{VarValue{"a"}})})}),
-      make(AppExp{"b",
-                  "f",
+              VarValue{table.lookup("a")},
+              make(IfExp{VarValue{table.lookup("x")},
+                         make(BopExp{table.lookup("c"), ast::Bop::Plus,
+                                     VarValue{table.lookup("x")},
+                                     VarValue{table.lookup("a")},
+                                     make(AppExp{table.lookup("d"),
+                                                 table.lookup("f"),
+                                                 {VarValue{table.lookup("c")}},
+                                                 make(HaltExp{VarValue{
+                                                     table.lookup("d")}})})}),
+                         make(HaltExp{IntValue{5}})}),
+              make(HaltExp{VarValue{table.lookup("a")}})})}),
+      make(AppExp{table.lookup("b"),
+                  table.lookup("f"),
                   {IntValue{0}, IntValue{1}}, // Pass 0 for closure for now.
-                  make(HaltExp{VarValue{"b"}})})});
-  auto hoisted = anf::hoist(std::move(exp));
-  auto lowered = lower::lower(std::move(hoisted));
+                  make(HaltExp{VarValue{table.lookup("b")}})})});
+  auto hoisted = anf::hoist(table, std::move(exp));
+  auto lowered = lower::lower(table, std::move(hoisted));
   std::ostringstream out;
   llvm::raw_os_ostream rout(out);
   lowered->print(rout, nullptr);
@@ -146,6 +159,7 @@ TEST(Lower, IfElse) {
 }
 
 TEST(Lower, AppClosure) {
+  SymbolTable table;
   // (fn g => (fn x => g x) (fn y => g y))
   // let f1 = fn g =>
   //   let f2 = fn x =>
@@ -161,24 +175,28 @@ TEST(Lower, AppClosure) {
   // in
   // f1
   auto exp = make(FunExp{
-      "f1",
-      {"g"},
+      table.lookup("f1"),
+      {table.lookup("g")},
       make(FunExp{
-          "f2",
-          {"x"},
-          make(AppExp{
-              "t1", "g", {VarValue{"x"}}, make(HaltExp{VarValue{"t1"}})}),
+          table.lookup("f2"),
+          {table.lookup("x")},
+          make(AppExp{table.lookup("t1"),
+                      table.lookup("g"),
+                      {VarValue{table.lookup("x")}},
+                      make(HaltExp{VarValue{table.lookup("t1")}})}),
           make(FunExp{
-              "f3",
-              {"y"},
-              make(AppExp{
-                  "t2", "g", {VarValue{"y"}}, make(HaltExp{VarValue{"t2"}})}),
-              make(AppExp{"t3",
-                          "f2",
-                          {VarValue{"f3"}},
-                          make(HaltExp{VarValue{"t3"}})})})}),
-      make(HaltExp{VarValue{"f1"}})});
-  auto converted = convert::closureConvert(std::move(exp));
+              table.lookup("f3"),
+              {table.lookup("y")},
+              make(AppExp{table.lookup("t2"),
+                          table.lookup("g"),
+                          {VarValue{table.lookup("y")}},
+                          make(HaltExp{VarValue{table.lookup("t2")}})}),
+              make(AppExp{table.lookup("t3"),
+                          table.lookup("f2"),
+                          {VarValue{table.lookup("f3")}},
+                          make(HaltExp{VarValue{table.lookup("t3")}})})})}),
+      make(HaltExp{VarValue{table.lookup("f1")}})});
+  auto converted = convert::closureConvert(table, std::move(exp));
   std::string expectedANF =
       "FunExp { f1, [closure0, g], FunExp { f2, [closure1, x], ProjExp { g, "
       "closure1, 1, ProjExp { proj5, g, 0, AppExp { t1, proj5, [g, x], HaltExp "
@@ -187,10 +205,10 @@ TEST(Lower, AppClosure) {
       "g, 0, AppExp { t2, proj4, [g, y], HaltExp { t2 } } } } }, TupleExp { "
       "f3, [f3, f2, g], ProjExp { proj3, f2, 0, AppExp { t3, proj3, [f2, f3], "
       "HaltExp { t3 } } } } } } }, TupleExp { f1, [f1], HaltExp { f1 } } }";
-  EXPECT_EQ(converted->dump(), expectedANF);
+  EXPECT_EQ(converted->dump(table), expectedANF);
 
-  auto hoisted = anf::hoist(std::move(converted));
-  auto lowered = lower::lower(std::move(hoisted));
+  auto hoisted = anf::hoist(table, std::move(converted));
+  auto lowered = lower::lower(table, std::move(hoisted));
   std::ostringstream out;
   llvm::raw_os_ostream rout(out);
   lowered->print(rout, nullptr);

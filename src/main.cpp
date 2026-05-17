@@ -7,6 +7,7 @@
 #include "lower.h"
 #include "parser.h"
 #include "rename.h"
+#include "symbol.h"
 #include "utils.h"
 #include "llvm/Support/TargetSelect.h"
 #include <iostream>
@@ -24,6 +25,7 @@ const std::unordered_map<ast::Bop, std::optional<std::pair<int, int>>>
                    {ast::Bop::Times, {{3, 4}}}};
 
 int main() {
+  SymbolTable table;
   arena::LinkedAllocator allocator(1 << 28);
   arena::Typed<ast::Exp<raw_ptr>, decltype(allocator)> expAlloc(allocator);
 
@@ -33,7 +35,7 @@ int main() {
 
   std::unique_ptr<llvm::orc::KaleidoscopeJIT> jit =
       ExitOnErr(llvm::orc::KaleidoscopeJIT::Create());
-  Lexer lexer(std::cin);
+  Lexer lexer(table, std::cin);
   Parser<raw_ptr, decltype(expAlloc)> parser(expAlloc, lexer, defaultInfixBp);
   while (true) {
     allocator.reset();
@@ -52,7 +54,7 @@ int main() {
       }
       exp = parser.parseExpression();
     } catch (ParserException &e) {
-      std::cerr << e.what() << std::endl;
+      std::cerr << e.what() << "\n";
       if (e.abort()) {
         break;
       } else {
@@ -60,24 +62,24 @@ int main() {
       }
     }
     if constexpr (LAMBCALC_DEBUG) {
-      std::cout << *exp << std::endl;
+      std::cout << exp->dump(table) << "\n";
     }
     try {
-      ast::rename(*exp);
+      ast::rename(table, *exp);
     } catch (ast::NotInScopeException &e) {
-      std::cerr << e.what() << std::endl;
+      std::cerr << e.what() << "\n";
       continue;
     }
     if constexpr (LAMBCALC_DEBUG) {
-      std::cout << "After renaming: " << *exp << std::endl;
+      std::cout << "After renaming: " << exp->dump(table) << "\n";
     }
-    auto anf = anf::convertDefunc(*exp);
-    auto convert = convert::closureConvert(std::move(anf));
+    auto anf = anf::convertDefunc(table, *exp);
+    auto convert = convert::closureConvert(table, std::move(anf));
     if constexpr (LAMBCALC_DEBUG) {
-      std::cout << *convert << std::endl;
+      std::cout << convert->dump(table) << "\n";
     }
 
-    auto hoisted = anf::hoist(std::move(convert));
+    auto hoisted = anf::hoist(table, std::move(convert));
     if constexpr (LAMBCALC_DEBUG) {
       for (const auto &fn : hoisted) {
         std::cout << fn.name << "( ";
@@ -89,19 +91,19 @@ int main() {
         if (fn.entryBlock.slot) {
           std::cout << *fn.entryBlock.slot;
         }
-        std::cout << " >: " << std::endl << *fn.entryBlock.body << std::endl;
+        std::cout << " >: " << "\n" << fn.entryBlock.body->dump(table) << "\n";
         for (const auto &block : fn.blocks) {
           std::cout << block.name << " < ";
           if (block.slot) {
             std::cout << *block.slot;
           }
-          std::cout << " >: " << std::endl << *block.body << std::endl;
+          std::cout << " >: " << "\n" << block.body->dump(table) << "\n";
         }
 
         std::cout << std::endl;
       }
     }
-    auto mod = lower::lower(std::move(hoisted), jit->getDataLayout());
+    auto mod = lower::lower(table, std::move(hoisted), jit->getDataLayout());
     if constexpr (LAMBCALC_DEBUG) {
       mod->dump();
     }

@@ -19,7 +19,8 @@ struct Function {
   std::vector<Join> blocks;
 };
 
-std::vector<Function> hoist(std::unique_ptr<anf::Exp> &&exp);
+std::vector<Function> hoist(SymbolTable &table,
+                            std::unique_ptr<anf::Exp> &&exp);
 
 } // namespace anf
 } // namespace lambcalc

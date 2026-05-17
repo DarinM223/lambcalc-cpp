@@ -34,21 +34,23 @@ using LLVMLowerPipeline =
     MatchIfJump<WorklistVisitor<ExpValueVisitor<DefaultVisitor>,
                                 WorklistTask<Exp>, std::stack>>;
 class LLVMLowerVisitor : public LLVMLowerPipeline {
+  const SymbolTable &table_;
   LLVMContext &ctx_;
   Module &module_;
   IRBuilder<> &builder_;
   llvm::Value *value_;
-  llvm::StringMap<llvm::AllocaInst *> &spillSlots_;
-  llvm::StringMap<llvm::Value *> &namedValues_;
-  llvm::StringMap<llvm::BasicBlock *> &namedBlocks_;
+  llvm::DenseMap<Symbol, llvm::AllocaInst *> &spillSlots_;
+  llvm::DenseMap<Symbol, llvm::Value *> &namedValues_;
+  llvm::DenseMap<Symbol, llvm::BasicBlock *> &namedBlocks_;
 
 public:
-  LLVMLowerVisitor(LLVMContext &ctx, Module &module, IRBuilder<> &builder,
-                   llvm::StringMap<llvm::AllocaInst *> &spillSlots,
-                   llvm::StringMap<llvm::Value *> &namedValues,
-                   llvm::StringMap<llvm::BasicBlock *> &namedBlocks)
-      : ctx_(ctx), module_(module), builder_(builder), value_(nullptr),
-        spillSlots_(spillSlots), namedValues_(namedValues),
+  LLVMLowerVisitor(const SymbolTable &table, LLVMContext &ctx, Module &module,
+                   IRBuilder<> &builder,
+                   llvm::DenseMap<Symbol, llvm::AllocaInst *> &spillSlots,
+                   llvm::DenseMap<Symbol, llvm::Value *> &namedValues,
+                   llvm::DenseMap<Symbol, llvm::BasicBlock *> &namedBlocks)
+      : table_(table), ctx_(ctx), module_(module), builder_(builder),
+        value_(nullptr), spillSlots_(spillSlots), namedValues_(namedValues),
         namedBlocks_(namedBlocks) {}
   void visitIntValue(IntValue &value) override {
     value_ = builder_.getInt64(value.value);
@@ -59,12 +61,14 @@ public:
   void visitGlobValue(GlobValue &value) override {
     llvm::Function *function;
     llvm::GlobalVariable *global;
-    if ((function = module_.getFunction(value.glob))) {
+    if ((function = module_.getFunction(table_.lookup(value.glob)))) {
       value_ = builder_.CreatePtrToInt(function, builder_.getInt64Ty());
-    } else if ((global = module_.getGlobalVariable(value.glob))) {
+    } else if ((global =
+                    module_.getGlobalVariable(table_.lookup(value.glob)))) {
       value_ = builder_.CreatePtrToInt(global, builder_.getInt64Ty());
     } else {
-      value_ = module_.getOrInsertGlobal(value.glob, builder_.getInt64Ty());
+      value_ = module_.getOrInsertGlobal(table_.lookup(value.glob),
+                                         builder_.getInt64Ty());
     }
   }
 
@@ -98,10 +102,12 @@ public:
       auto fPtrTy = PointerType::get(fty, 0);
       auto fnPtrInt = namedValues_[exp.funName];
       auto fn = builder_.CreateIntToPtr(fnPtrInt, fPtrTy);
-      namedValues_[exp.name] = builder_.CreateCall(fty, fn, params, exp.name);
+      namedValues_[exp.name] =
+          builder_.CreateCall(fty, fn, params, table_.lookup(exp.name));
     } else {
-      auto fn = module_.getFunction(exp.funName);
-      namedValues_[exp.name] = builder_.CreateCall(fn, params, exp.name);
+      auto fn = module_.getFunction(table_.lookup(exp.funName));
+      namedValues_[exp.name] =
+          builder_.CreateCall(fn, params, table_.lookup(exp.name));
     }
     return LLVMLowerPipeline::operator()(exp);
   }
@@ -123,15 +129,16 @@ public:
       break;
     }
     namedValues_[exp.name] =
-        builder_.CreateBinOp(bop, param1, param2, exp.name);
+        builder_.CreateBinOp(bop, param1, param2, table_.lookup(exp.name));
     return LLVMLowerPipeline::operator()(exp);
   }
   void operator()(TupleExp &exp) {
     auto mallocTy =
         FunctionType::get(builder_.getPtrTy(), builder_.getInt64Ty(), false);
     auto malloc = module_.getOrInsertFunction("malloc", mallocTy);
-    auto ptr = builder_.CreateCall(
-        malloc, {builder_.getInt64(exp.values.size() * 8)}, exp.name);
+    auto ptr =
+        builder_.CreateCall(malloc, {builder_.getInt64(exp.values.size() * 8)},
+                            table_.lookup(exp.name));
     namedValues_[exp.name] =
         builder_.CreatePtrToInt(ptr, builder_.getInt64Ty());
     for (size_t i = 0; i < exp.values.size(); ++i) {
@@ -150,8 +157,8 @@ public:
     auto tuplePtr = builder_.CreateIntToPtr(tupleInt, builder_.getPtrTy());
     auto gep = builder_.CreateGEP(builder_.getInt64Ty(), tuplePtr,
                                   {builder_.getInt64(exp.index)});
-    namedValues_[exp.name] =
-        builder_.CreateLoad(builder_.getInt64Ty(), gep, exp.name);
+    namedValues_[exp.name] = builder_.CreateLoad(builder_.getInt64Ty(), gep,
+                                                 table_.lookup(exp.name));
     return LLVMLowerPipeline::operator()(exp);
   }
   void operator()(IfExp &exp) { return LLVMLowerPipeline::operator()(exp); }
@@ -227,29 +234,31 @@ std::unique_ptr<Module> initializeModuleAndManagers(const DataLayout &layout) {
   return mod;
 }
 
-void lowerModule(std::vector<Function> &&fns, Module &module) {
+void lowerModule(const SymbolTable &table, std::vector<Function> &&fns,
+                 Module &module) {
   auto builder = std::make_unique<IRBuilder<>>(*ctx);
   for (auto &fn : fns) {
     // getPtrTy() gets an opaque pointer, which is preferred for modern LLVM
     // than a typed pointer.
     auto ty = getFunctionType(*builder, fn.params);
-    llvm::Function::Create(ty, llvm::GlobalValue::ExternalLinkage, fn.name,
-                           module);
+    llvm::Function::Create(ty, llvm::GlobalValue::ExternalLinkage,
+                           table.lookup(fn.name), module);
   }
   for (auto &fn : fns) {
-    StringMap<llvm::AllocaInst *> spillSlots;
-    StringMap<llvm::Value *> namedValues;
-    StringMap<llvm::BasicBlock *> namedBlocks;
-    LLVMLowerVisitor visitor(*ctx, module, *builder, spillSlots, namedValues,
-                             namedBlocks);
+    DenseMap<Symbol, llvm::AllocaInst *> spillSlots;
+    DenseMap<Symbol, llvm::Value *> namedValues;
+    DenseMap<Symbol, llvm::BasicBlock *> namedBlocks;
+    LLVMLowerVisitor visitor(table, *ctx, module, *builder, spillSlots,
+                             namedValues, namedBlocks);
 
-    auto loweredFn = module.getFunction(fn.name);
+    auto loweredFn = module.getFunction(table.lookup(fn.name));
     auto loweredEntryBlock =
-        BasicBlock::Create(*ctx, fn.entryBlock.name, loweredFn);
+        BasicBlock::Create(*ctx, table.lookup(fn.entryBlock.name), loweredFn);
     namedBlocks[fn.entryBlock.name] = loweredEntryBlock;
     builder->SetInsertPoint(loweredEntryBlock);
     for (auto &block : fn.blocks) {
-      auto loweredBlock = BasicBlock::Create(*ctx, block.name, loweredFn);
+      auto loweredBlock =
+          BasicBlock::Create(*ctx, table.lookup(block.name), loweredFn);
       namedBlocks[block.name] = loweredBlock;
       // preprocess spill slots
       if (block.slot) {
@@ -258,8 +267,8 @@ void lowerModule(std::vector<Function> &&fns, Module &module) {
     }
     size_t i = 0;
     for (auto &arg : loweredFn->args()) {
-      const std::string &param = fn.params[i++];
-      arg.setName(param);
+      const Symbol &param = fn.params[i++];
+      arg.setName(table.lookup(param));
       namedValues[param] = &arg;
     }
 
@@ -269,8 +278,8 @@ void lowerModule(std::vector<Function> &&fns, Module &module) {
       builder->SetInsertPoint(loweredBlock);
       if (block.slot) {
         auto slot = spillSlots[block.name];
-        namedValues[*block.slot] =
-            builder->CreateLoad(builder->getInt64Ty(), slot, *block.slot);
+        namedValues[*block.slot] = builder->CreateLoad(
+            builder->getInt64Ty(), slot, table.lookup(*block.slot));
       }
       lowerBlock(visitor, block);
     }
@@ -278,16 +287,18 @@ void lowerModule(std::vector<Function> &&fns, Module &module) {
   }
 }
 
-std::unique_ptr<Module> lower(std::vector<Function> &&fns) {
+std::unique_ptr<Module> lower(const SymbolTable &table,
+                              std::vector<Function> &&fns) {
   auto module = initializeModuleAndManagers();
-  lowerModule(std::move(fns), *module);
+  lowerModule(table, std::move(fns), *module);
   return module;
 }
 
-std::unique_ptr<Module> lower(std::vector<Function> &&fns,
+std::unique_ptr<Module> lower(const SymbolTable &table,
+                              std::vector<Function> &&fns,
                               const DataLayout &layout) {
   auto module = initializeModuleAndManagers(layout);
-  lowerModule(std::move(fns), *module);
+  lowerModule(table, std::move(fns), *module);
   return module;
 }
 

@@ -1,6 +1,7 @@
 #ifndef AST_H
 #define AST_H
 
+#include "symbol.h"
 #include <functional>
 #include <memory>
 #include <string>
@@ -20,11 +21,11 @@ struct IntExp {
 };
 
 struct VarExp {
-  std::string name;
+  Symbol name;
 };
 
 template <template <class> class Ptr> struct LamExp {
-  std::string param;
+  Symbol param;
   Ptr<Exp<Ptr>> body;
 };
 
@@ -58,8 +59,9 @@ struct Exp : public std::variant<IntExp, VarExp, LamExp<Ptr>, AppExp<Ptr>,
                      IfExp<Ptr>>::variant;
 
   template <template <class> class P>
-  friend std::ostream &operator<<(std::ostream &os, const Exp<P> &exp);
-  std::string dump();
+  friend void print(const SymbolTable &table, std::ostream &os,
+                    const Exp<P> &exp);
+  std::string dump(const SymbolTable &);
 
   // Need to redefine the move constructor after defining the destructor :(
   Exp(Exp<Ptr> &&) = default;
@@ -68,7 +70,8 @@ struct Exp : public std::variant<IntExp, VarExp, LamExp<Ptr>, AppExp<Ptr>,
 
 std::unique_ptr<Exp<>> make(Exp<> &&exp);
 std::unique_ptr<anf::Exp>
-convert(Exp<> &exp, std::function<std::unique_ptr<anf::Exp>(anf::Value)> k);
+convert(SymbolTable &table, Exp<> &exp,
+        std::function<std::unique_ptr<anf::Exp>(anf::Value)> k);
 
 } // namespace ast
 } // namespace lambcalc

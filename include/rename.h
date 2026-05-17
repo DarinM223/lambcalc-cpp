@@ -17,7 +17,8 @@ public:
   virtual const char *what() const throw() { return reason_.c_str(); }
 };
 
-template <template <class> class Ptr> void rename(ast::Exp<Ptr> &exp);
+template <template <class> class Ptr>
+void rename(SymbolTable &table, ast::Exp<Ptr> &exp);
 
 } // namespace ast
 } // namespace lambcalc

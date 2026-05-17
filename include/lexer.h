@@ -1,7 +1,7 @@
 #ifndef LEXER_H
 #define LEXER_H
 
-#include <string>
+#include "symbol.h"
 
 namespace lambcalc {
 
@@ -23,15 +23,17 @@ enum class Token {
 };
 
 class Lexer {
+  SymbolTable &table_;
   std::istream &in_;
   int lastChar_;
-  std::string identifier_;
+  Symbol identifier_;
   int numberValue_;
 
 public:
-  explicit Lexer(std::istream &in) : in_(in), lastChar_(' '), numberValue_(0) {}
+  explicit Lexer(SymbolTable &table, std::istream &in)
+      : table_(table), in_(in), lastChar_(' '), numberValue_(0) {}
   Token getToken();
-  const std::string &getIdentifier() const { return identifier_; }
+  const Symbol &getIdentifier() const { return identifier_; }
   int getNumber() const { return numberValue_; }
 };
 
