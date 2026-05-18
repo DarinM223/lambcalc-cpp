@@ -1,5 +1,6 @@
 #include "KaleidoscopeJIT.h"
 #include "anf.h"
+#include "anf_computed_goto.h"
 #include "arena.h"
 #include "ast.h"
 #include "convert.h"
@@ -73,7 +74,7 @@ int main() {
     if constexpr (LAMBCALC_DEBUG) {
       std::cout << "After renaming: " << exp->dump(table) << "\n";
     }
-    auto anf = anf::convertDefunc(table, *exp);
+    auto anf = anf::convertComputedGoto(table, *exp);
     auto convert = convert::closureConvert(table, std::move(anf));
     if constexpr (LAMBCALC_DEBUG) {
       std::cout << convert->dump(table) << "\n";
