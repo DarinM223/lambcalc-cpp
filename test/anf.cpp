@@ -1,4 +1,5 @@
 #include "anf.h"
+#include "anf_computed_goto.h"
 #include "ast.h"
 #include <gtest/gtest.h>
 
@@ -30,6 +31,10 @@ TEST(AnfConversion, LamApp) {
       "FunExp { tmp1, [x], BopExp { tmp0, +, x, 1, HaltExp { tmp0 } }, AppExp "
       "{ tmp2, tmp1, [1], HaltExp { tmp2 } } }";
   EXPECT_EQ(anf->dump(table), expected);
+
+  anf::resetCounter();
+  auto anfComputedGoto = anf::convertComputedGoto(table, *expr);
+  EXPECT_EQ(anf->dump(table), anfComputedGoto->dump(table));
 }
 
 TEST(AnfConversion, IfElse) {
@@ -79,6 +84,10 @@ TEST(AnfConversion, IfElse) {
   anf::resetCounter();
   auto anfDefunc = anf::convertDefunc(table, *expr);
   EXPECT_EQ(anf->dump(table), anfDefunc->dump(table));
+
+  anf::resetCounter();
+  auto anfComputedGoto = anf::convertComputedGoto(table, *expr);
+  EXPECT_EQ(anf->dump(table), anfComputedGoto->dump(table));
 }
 
 TEST(AnfConversion, NoStackOverflow) {
@@ -93,6 +102,10 @@ TEST(AnfConversion, NoStackOverflow) {
   anf::resetCounter();
   auto anf = anf::convertDefunc(table, *exp);
   EXPECT_EQ(anf->dump(table).size(), 67793);
+
+  anf::resetCounter();
+  auto anfComputedGoto = anf::convertComputedGoto(table, *exp);
+  EXPECT_EQ(anf->dump(table), anfComputedGoto->dump(table));
 }
 
 } // namespace lambcalc

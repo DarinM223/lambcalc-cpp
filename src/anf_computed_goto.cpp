@@ -8,12 +8,6 @@
 namespace lambcalc {
 namespace anf {
 
-static int counter = 0;
-Symbol fresh(SymbolTable &table) {
-  return table.lookup(std::string("tmp") + std::to_string(counter++));
-}
-void resetCounter() { counter = 0; }
-
 enum K_Tag { K_LAM1 = 0, K_APP1, K_APP2, K_BOP1, K_BOP2, K_IF1, K_IF2 };
 enum K2_Tag {
   K2_CONVERT = 0,
@@ -26,115 +20,116 @@ enum K2_Tag {
   K2_IF3
 };
 
-struct K;
-struct K2;
+template <template <class> class Ptr> struct K;
+template <template <class> class Ptr> struct K2;
 
-struct K_App1 {
-  ast::Exp<raw_ptr> *x;
-  K *k;
+template <template <class> class Ptr> struct K_App1 {
+  ast::Exp<Ptr> *x;
+  K<Ptr> *k;
 };
 
-struct K_App2 {
+template <template <class> class Ptr> struct K_App2 {
   Value f;
-  K *k;
+  K<Ptr> *k;
 };
 
-struct K_Bop1 {
-  ast::Exp<raw_ptr> *y;
+template <template <class> class Ptr> struct K_Bop1 {
+  ast::Exp<Ptr> *y;
   ast::Bop bop;
-  K *k;
+  K<Ptr> *k;
 };
 
-struct K_Bop2 {
+template <template <class> class Ptr> struct K_Bop2 {
   Value x;
   ast::Bop bop;
-  K *k;
+  K<Ptr> *k;
 };
 
-struct K_If1 {
-  ast::Exp<raw_ptr> *t, *f;
-  K *k;
+template <template <class> class Ptr> struct K_If1 {
+  ast::Exp<Ptr> *t, *f;
+  K<Ptr> *k;
 };
 
 struct K_If2 {
   Symbol j;
 };
 
-struct K {
+template <template <class> class Ptr> struct K {
   K_Tag tag;
   union {
-    K_App1 app1;
-    K_App2 app2;
-    K_Bop1 bop1;
-    K_Bop2 bop2;
-    K_If1 if1;
+    K_App1<Ptr> app1;
+    K_App2<Ptr> app2;
+    K_Bop1<Ptr> bop1;
+    K_Bop2<Ptr> bop2;
+    K_If1<Ptr> if1;
     K_If2 if2;
   };
 };
 
-struct K2_Lam1 {
-  K2 *k2;
-  K *k;
+template <template <class> class Ptr> struct K2_Lam1 {
+  K2<Ptr> *k2;
+  K<Ptr> *k;
   Symbol v;
 };
 
-struct K2_Lam2 {
-  K2 *k2;
+template <template <class> class Ptr> struct K2_Lam2 {
+  K2<Ptr> *k2;
   Symbol f, v;
   Exp *body;
 };
 
-struct K2_App1 {
+template <template <class> class Ptr> struct K2_App1 {
   Symbol r, f;
   Value x;
-  K2 *k2;
+  K2<Ptr> *k2;
 };
 
-struct K2_Bop1 {
+template <template <class> class Ptr> struct K2_Bop1 {
   Symbol r;
   ast::Bop bop;
   Value x, y;
-  K2 *k2;
+  K2<Ptr> *k2;
 };
 
-struct K2_If1 {
-  ast::Exp<raw_ptr> *t, *f;
-  K2 *k2;
+template <template <class> class Ptr> struct K2_If1 {
+  ast::Exp<Ptr> *t, *f;
+  K2<Ptr> *k2;
   Symbol j, p;
   Value c;
 };
 
-struct K2_If2 {
-  ast::Exp<raw_ptr> *f;
-  K2 *k2;
+template <template <class> class Ptr> struct K2_If2 {
+  ast::Exp<Ptr> *f;
+  K2<Ptr> *k2;
   Symbol j, p;
   Value c;
   Exp *rest;
 };
 
-struct K2_If3 {
+template <template <class> class Ptr> struct K2_If3 {
   Exp *t;
-  K2 *k2;
+  K2<Ptr> *k2;
   Symbol j, p;
   Value c;
   Exp *rest;
 };
 
-struct K2 {
+template <template <class> class Ptr> struct K2 {
   K2_Tag tag;
   union {
-    K2_Lam1 lam1;
-    K2_Lam2 lam2;
-    K2_App1 app1;
-    K2_Bop1 bop1;
-    K2_If1 if1;
-    K2_If2 if2;
-    K2_If3 if3;
+    K2_Lam1<Ptr> lam1;
+    K2_Lam2<Ptr> lam2;
+    K2_App1<Ptr> app1;
+    K2_Bop1<Ptr> bop1;
+    K2_If1<Ptr> if1;
+    K2_If2<Ptr> if2;
+    K2_If3<Ptr> if3;
   };
 };
 
 // NOTE: Hopefully this elides the runtime check.
-template <typename T> const T *getVariant(ast::Exp<raw_ptr> *ptr) {
+template <typename T, template <class> class Ptr>
+const T *getVariant(ast::Exp<Ptr> *ptr) {
   return std::visit(overloaded{[](const T &exp) { return &exp; },
                                [](const auto &) {
                                  std::unreachable();
@@ -148,17 +143,18 @@ template <typename T> const T *getVariant(ast::Exp<raw_ptr> *ptr) {
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wpedantic"
 
-std::unique_ptr<Exp> convertDefunc(SymbolTable &table,
-                                   ast::Exp<raw_ptr> &root) {
+template <template <class> class Ptr>
+std::unique_ptr<Exp> convertComputedGoto(SymbolTable &table,
+                                         ast::Exp<Ptr> &root) {
   arena::LinkedAllocator allocator(1 << 28);
   // Parameters for apply_k2, apply_k, and go normalized.
   // If two parameters for different functions have the same type,
   // they can share the same variable because tail calls destroy the stack.
-  ast::Exp<raw_ptr> *go_exp = &root;
+  ast::Exp<Ptr> *go_exp = &root;
   std::unique_ptr<Exp> k2_exp;
-  K *k = allocator.allocate<K>();
+  auto k = allocator.allocate<K<Ptr>>();
   k->tag = K_LAM1;
-  K2 *k2 = allocator.allocate<K2>();
+  auto k2 = allocator.allocate<K2<Ptr>>();
   k2->tag = K2_CONVERT;
   Value value;
 
@@ -183,11 +179,14 @@ std::unique_ptr<Exp> convertDefunc(SymbolTable &table,
     auto f = fresh(table);
     k = frame.k;
     value = VarValue{f};
-    K2 *newK2 = allocator.allocate<K2>();
+    auto newK2 = allocator.allocate<K2<Ptr>>();
     newK2->tag = K2_LAM2;
     newK2->lam2.f = f;
     newK2->lam2.v = frame.v;
-    newK2->lam2.body = &*k2_exp;
+    {
+      std::unique_ptr<Exp> body = std::move(k2_exp);
+      newK2->lam2.body = body.release();
+    }
     newK2->lam2.k2 = frame.k2;
     k2 = newK2;
     goto *apply_k_table[k->tag];
@@ -224,7 +223,7 @@ std::unique_ptr<Exp> convertDefunc(SymbolTable &table,
     auto frame = k2->if1;
     go_exp = frame.t;
 
-    K2 *newK2 = allocator.allocate<K2>();
+    auto newK2 = allocator.allocate<K2<Ptr>>();
     newK2->tag = K2_IF2;
     newK2->if2.f = frame.f;
     newK2->if2.j = frame.j;
@@ -237,7 +236,7 @@ std::unique_ptr<Exp> convertDefunc(SymbolTable &table,
     newK2->if2.k2 = frame.k2;
     k2 = newK2;
 
-    k = allocator.allocate<K>();
+    k = allocator.allocate<K<Ptr>>();
     k->tag = K_IF2;
     k->if2.j = frame.j;
 
@@ -247,7 +246,7 @@ std::unique_ptr<Exp> convertDefunc(SymbolTable &table,
     auto frame = k2->if2;
     go_exp = frame.f;
 
-    K2 *newK2 = allocator.allocate<K2>();
+    auto newK2 = allocator.allocate<K2<Ptr>>();
     newK2->tag = K2_IF3;
     {
       std::unique_ptr<Exp> t = std::move(k2_exp);
@@ -260,7 +259,7 @@ std::unique_ptr<Exp> convertDefunc(SymbolTable &table,
     newK2->if3.k2 = frame.k2;
     k2 = newK2;
 
-    k = allocator.allocate<K>();
+    k = allocator.allocate<K<Ptr>>();
     k->tag = K_IF2;
     k->if2.j = frame.j;
 
@@ -286,7 +285,7 @@ std::unique_ptr<Exp> convertDefunc(SymbolTable &table,
     auto frame = k->app1;
     go_exp = frame.x;
 
-    K *newK = allocator.allocate<K>();
+    auto newK = allocator.allocate<K<Ptr>>();
     newK->tag = K_APP2;
     newK->app2.f = std::move(value);
     newK->app2.k = frame.k;
@@ -299,7 +298,7 @@ std::unique_ptr<Exp> convertDefunc(SymbolTable &table,
 
     std::visit(overloaded{[&](VarValue &f) {
                             auto r = fresh(table);
-                            K2 *newK2 = allocator.allocate<K2>();
+                            auto newK2 = allocator.allocate<K2<Ptr>>();
                             newK2->tag = K2_APP1;
                             newK2->app1.r = r;
                             newK2->app1.f = f.var;
@@ -319,7 +318,7 @@ std::unique_ptr<Exp> convertDefunc(SymbolTable &table,
     auto frame = k->bop1;
     go_exp = frame.y;
 
-    K *newK = allocator.allocate<K>();
+    auto newK = allocator.allocate<K<Ptr>>();
     newK->tag = K_BOP2;
     newK->bop2.x = std::move(value);
     newK->bop2.bop = frame.bop;
@@ -332,7 +331,7 @@ std::unique_ptr<Exp> convertDefunc(SymbolTable &table,
     auto frame = k->bop2;
     auto r = fresh(table);
 
-    K2 *newK2 = allocator.allocate<K2>();
+    auto newK2 = allocator.allocate<K2<Ptr>>();
     newK2->tag = K2_BOP1;
     newK2->bop1.r = r;
     newK2->bop1.bop = frame.bop;
@@ -350,7 +349,7 @@ std::unique_ptr<Exp> convertDefunc(SymbolTable &table,
     auto j = fresh(table);
     auto p = fresh(table);
 
-    K2 *newK2 = allocator.allocate<K2>();
+    auto newK2 = allocator.allocate<K2<Ptr>>();
     newK2->tag = K2_IF1;
     newK2->if1.t = frame.t;
     newK2->if1.f = frame.f;
@@ -381,13 +380,13 @@ std::unique_ptr<Exp> convertDefunc(SymbolTable &table,
     goto *apply_k_table[k->tag];
   }
   go_lam_exp: {
-    auto exp = getVariant<ast::LamExp<raw_ptr>>(go_exp);
-    go_exp = exp->body;
-    K *oldK = k;
-    k = allocator.allocate<K>();
+    auto exp = getVariant<ast::LamExp<Ptr>>(go_exp);
+    go_exp = &*exp->body;
+    auto oldK = k;
+    k = allocator.allocate<K<Ptr>>();
     k->tag = K_LAM1;
 
-    K2 *newK2 = allocator.allocate<K2>();
+    auto newK2 = allocator.allocate<K2<Ptr>>();
     newK2->tag = K2_LAM1;
     newK2->lam1.k = oldK;
     newK2->lam1.v = exp->param;
@@ -396,40 +395,45 @@ std::unique_ptr<Exp> convertDefunc(SymbolTable &table,
     goto *go_table[go_exp->index()];
   }
   go_app_exp: {
-    auto exp = getVariant<ast::AppExp<raw_ptr>>(go_exp);
-    go_exp = exp->fn;
-    K *newK = allocator.allocate<K>();
+    auto exp = getVariant<ast::AppExp<Ptr>>(go_exp);
+    go_exp = &*exp->fn;
+    auto newK = allocator.allocate<K<Ptr>>();
     newK->tag = K_APP1;
-    newK->app1.x = exp->arg;
+    newK->app1.x = &*exp->arg;
     newK->app1.k = k;
     k = newK;
     goto *go_table[go_exp->index()];
   }
   go_bop_exp: {
-    auto exp = getVariant<ast::BopExp<raw_ptr>>(go_exp);
-    go_exp = exp->arg1;
-    K *newK = allocator.allocate<K>();
+    auto exp = getVariant<ast::BopExp<Ptr>>(go_exp);
+    go_exp = &*exp->arg1;
+    auto newK = allocator.allocate<K<Ptr>>();
     newK->tag = K_BOP1;
-    newK->bop1.y = exp->arg2;
+    newK->bop1.y = &*exp->arg2;
     newK->bop1.bop = exp->bop;
     newK->bop1.k = k;
     k = newK;
     goto *go_table[go_exp->index()];
   }
   go_if_exp: {
-    auto exp = getVariant<ast::IfExp<raw_ptr>>(go_exp);
-    go_exp = exp->cond;
-    K *newK = allocator.allocate<K>();
-    k->tag = K_IF1;
-    k->if1.t = exp->then;
-    k->if1.f = exp->els;
-    k->if1.k = k;
+    auto exp = getVariant<ast::IfExp<Ptr>>(go_exp);
+    go_exp = &*exp->cond;
+    auto newK = allocator.allocate<K<Ptr>>();
+    newK->tag = K_IF1;
+    newK->if1.t = &*exp->then;
+    newK->if1.f = &*exp->els;
+    newK->if1.k = k;
     k = newK;
     goto *go_table[go_exp->index()];
   }
   }
   return nullptr;
 }
+
+template std::unique_ptr<Exp>
+convertComputedGoto(SymbolTable &table, ast::Exp<std::unique_ptr> &root);
+template std::unique_ptr<Exp> convertComputedGoto(SymbolTable &table,
+                                                  ast::Exp<raw_ptr> &root);
 
 #pragma GCC diagnostic pop
 #endif

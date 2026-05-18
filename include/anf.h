@@ -103,6 +103,7 @@ struct Exp : public std::variant<HaltExp, FunExp, JoinExp, JumpExp, AppExp,
   ~Exp();
 };
 
+Symbol fresh(SymbolTable &table);
 void resetCounter();
 std::unique_ptr<Exp> make(Exp &&exp);
 std::unique_ptr<Exp> convert(SymbolTable &table, ast::Exp<> &exp);
