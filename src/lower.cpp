@@ -127,6 +127,8 @@ public:
     case ast::Bop::Times:
       bop = llvm::Instruction::BinaryOps::Mul;
       break;
+    default:
+      bop = llvm::Instruction::BinaryOps::Add;
     }
     namedValues_[exp.name] =
         builder_.CreateBinOp(bop, param1, param2, table_.lookup(exp.name));

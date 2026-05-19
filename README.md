@@ -20,7 +20,7 @@ It is similar to these projects in [Smalltalk](https://github.com/DarinM223/lamb
 To build the project, run:
 
 ```
-cmake .
+cmake -DCMAKE_BUILD_TYPE=Release .
 make
 ```
 

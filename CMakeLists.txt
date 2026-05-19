@@ -17,7 +17,8 @@ FetchContent_Declare(
 set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(googletest)
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -Werror -Wpedantic -g -fsanitize=address,leak,undefined")
+add_compile_options("-Wall" "-Wextra" "-Werror" "-Wpedantic" "$<$<CONFIG:Release>:-save-temps;-O2>" "$<$<CONFIG:Debug>:-g;-fsanitize=address,leak,undefined>")
+add_link_options("$<$<CONFIG:Debug>:-g;-fsanitize=address,leak,undefined>")
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_EXTENSIONS ON)
 

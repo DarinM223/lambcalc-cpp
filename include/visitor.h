@@ -76,7 +76,14 @@ public:
   template <class... Args> WorklistVisitor(Args... args) : Visitor(args...) {}
   W<T> &getWorklist() { return worklist; }
   virtual void addWorklist(Ptr<Exp<Ptr>> *parentLink) {
+#ifdef __GNUC__
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
+#endif
     worklist.push(T(parentLink));
+#ifdef __GNUC__
+#pragma GCC diagnostic pop
+#endif
   }
   virtual void addWorklist(const Symbol &, Ptr<Exp<Ptr>> *parentLink) {
     addWorklist(parentLink);
@@ -146,7 +153,14 @@ public:
   template <class... Args> WorklistVisitor(Args... args) : Visitor(args...) {}
   W<T> &getWorklist() { return worklist; }
   virtual void addWorklist(std::unique_ptr<Exp> *parentLink) {
+#ifdef __GNUC__
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
+#endif
     worklist.push(T(parentLink));
+#ifdef __GNUC__
+#pragma GCC diagnostic pop
+#endif
   }
   virtual void addWorklist(const Var &, std::unique_ptr<Exp> *parentLink) {
     addWorklist(parentLink);

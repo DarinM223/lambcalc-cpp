@@ -28,6 +28,10 @@ void print(const SymbolTable &table, std::ostream &os, const Exp<Ptr> &exp) {
   std::visit(PrintExpVisitor<Ptr>(table, os), exp);
 }
 
+template void print(const SymbolTable &, std::ostream &,
+                    const Exp<std::unique_ptr> &);
+template void print(const SymbolTable &, std::ostream &, const Exp<raw_ptr> &);
+
 template <template <class> class Ptr>
 void PrintExpVisitor<Ptr>::operator()(const IntExp &exp) {
   out_ << exp.value;

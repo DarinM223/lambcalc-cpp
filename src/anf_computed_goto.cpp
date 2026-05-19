@@ -129,6 +129,7 @@ const T *getVariant(ast::Exp<Ptr> *ptr) {
 #if defined(__GNUC__) || defined(__clang__)
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wpedantic"
+#endif
 
 template <template <class> class Ptr>
 std::unique_ptr<Exp> convertComputedGoto(SymbolTable &table,
@@ -370,6 +371,7 @@ convertComputedGoto(SymbolTable &table, ast::Exp<std::unique_ptr> &root);
 template std::unique_ptr<Exp> convertComputedGoto(SymbolTable &table,
                                                   ast::Exp<raw_ptr> &root);
 
+#if defined(__GNUC__) || defined(__clang__)
 #pragma GCC diagnostic pop
 #endif
 
