@@ -14,8 +14,13 @@ FetchContent_Declare(
     googletest
     URL https://github.com/google/googletest/archive/03597a01ee50ed33e9dfd640b249b4be3799d395.zip
 )
+set(BENCHMARK_ENABLE_TESTING off)
+FetchContent_Declare(
+  googlebenchmark
+    GIT_REPOSITORY https://github.com/google/benchmark.git
+    GIT_TAG v1.9.5)
 set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
-FetchContent_MakeAvailable(googletest)
+FetchContent_MakeAvailable(googletest googlebenchmark)
 
 add_compile_options("-Wall" "-Wextra" "-Werror" "-Wpedantic" "$<$<CONFIG:Release>:-save-temps;-O2>" "$<$<CONFIG:Debug>:-g;-fsanitize=address,leak,undefined>")
 add_link_options("$<$<CONFIG:Debug>:-g;-fsanitize=address,leak,undefined>")
@@ -55,6 +60,10 @@ target_compile_features(lambcalc-lib PUBLIC cxx_std_23)
 add_executable(lambcalc src/main.cpp)
 target_link_libraries(lambcalc PRIVATE LLVM lambcalc-lib)
 target_compile_features(lambcalc PUBLIC cxx_std_23)
+
+add_executable(lambcalc-bench bench/anf.cpp)
+target_link_libraries(lambcalc-bench PRIVATE LLVM lambcalc-lib benchmark::benchmark_main)
+target_compile_features(lambcalc-bench PUBLIC cxx_std_23)
 
 enable_testing()
 

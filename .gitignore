@@ -4,6 +4,7 @@ CMakeCache.txt
 Makefile
 lambcalc
 lambcalc-test
+lambcalc-bench
 googletest-prefix/
 _deps/
 build/
